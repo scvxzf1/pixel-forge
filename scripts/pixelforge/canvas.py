@@ -32,27 +32,94 @@ _BAYER_4X4 = (
 )
 
 
-def parse_grid_lines(grid: GridLike, frame_index: int = 0) -> List[str]:
-    """Validate and normalize an ASCII grid into a list of equal-width row strings."""
-    if isinstance(grid, str):
-        # Strip only leading/trailing empty newline boundaries; preserve space-filled rows
-        lines = grid.strip("\r\n").splitlines()
-    else:
-        lines = list(grid)
+def _clean_grid_raw_lines(grid: GridLike) -> List[str]:
+    """Normalize raw ASCII grid input while supporting Agent-friendly ergonomics:
+    - Full-line comments starting with `//` or `# ` (note: `#` without space can be a Resurrect64 pixel)
+    - Trailing inline comments separated by whitespace (`  # row 4 eyes`)
+    - Optional `|...|` vertical alignment pipe borders around rows
+    """
+    raw_lines = grid.strip("\r\n").splitlines() if isinstance(grid, str) else list(grid)
+    cleaned: List[str] = []
+    for row in raw_lines:
+        if not isinstance(row, str):
+            raise ValueError(f"Grid row must be a string, got {type(row).__name__}.")
+        s = row.rstrip("\r\n")
+        lstripped = s.lstrip()
+        if lstripped.startswith("//") or lstripped.startswith("# "):
+            continue
+        # Strip trailing ` # ...` inline comment (preceded by at least one space/tab)
+        for sep in ("  #", "\t#", " # "):
+            idx = s.find(sep)
+            if idx != -1:
+                s = s[:idx].rstrip()
+                break
+        # Strip `|...|` (or half-open `|...` / `...|`) framing pipes used for row alignment
+        st = s.strip()
+        if st.startswith("|") or st.endswith("|"):
+            if st.startswith("|"):
+                st = st[1:]
+            if st.endswith("|"):
+                st = st[:-1]
+            s = st
+        cleaned.append(s)
+    return cleaned
 
+
+def normalize_grid(
+    grid: GridLike,
+    pad_char: str = ".",
+    align: str = "left",
+) -> Tuple[List[str], List[str]]:
+    """Auto-heal ragged ASCII grid rows to uniform width. Returns `(lines, auto_fix_notes)`."""
+    lines = _clean_grid_raw_lines(grid)
+    if not lines or max(len(r) for r in lines) == 0:
+        raise ValueError("Empty ASCII grid.")
+    target_w = max(len(r) for r in lines)
+    notes: List[str] = []
+    out: List[str] = []
+    for y, r in enumerate(lines):
+        if len(r) < target_w:
+            pad_n = target_w - len(r)
+            notes.append(f"Row {y}: auto-padded {pad_n} trailing {pad_char!r} ({len(r)}->{target_w})")
+            if align == "center":
+                lp = pad_n // 2
+                rp = pad_n - lp
+                out.append((pad_char * lp) + r + (pad_char * rp))
+            else:
+                out.append(r + (pad_char * pad_n))
+        else:
+            out.append(r)
+    return out, notes
+
+
+def parse_grid_lines(
+    grid: GridLike,
+    frame_index: int = 0,
+    pad_ragged: bool = False,
+) -> List[str]:
+    """Validate and normalize an ASCII grid into a list of equal-width row strings."""
+    if pad_ragged:
+        lines, _ = normalize_grid(grid)
+        return lines
+
+    lines = _clean_grid_raw_lines(grid)
     if not lines or not lines[0]:
         raise ValueError(f"[Frame {frame_index}] Empty ASCII grid.")
 
     width = len(lines[0])
     for y, row in enumerate(lines):
-        if not isinstance(row, str):
-            raise ValueError(f"[Frame {frame_index}] Row {y} must be a string, got {type(row).__name__}.")
         if len(row) != width:
             diff = len(row) - width
             hint = f"{abs(diff)} char(s) too {'long' if diff > 0 else 'short'}"
+            ruler = "".join(str(i % 10) for i in range(max(width, len(row))))
+            fixed_preview = row[:width] if diff > 0 else (row + "." * (-diff))
             raise ValueError(
                 f"[Frame {frame_index}] Row {y} width mismatch: expected {width} (from row 0), "
-                f"got {len(row)} ({hint}). Row content: {row!r}"
+                f"got {len(row)} ({hint}).\n"
+                f"  Ruler : {ruler}\n"
+                f"  Row 0 : {lines[0]}\n"
+                f"  Row {y:<2d}: {row}\n"
+                f"  Quick fix (or pass pad_ragged=True): {fixed_preview!r}"
             )
     return lines
 
@@ -61,9 +128,10 @@ def render_grid(
     grid: GridLike,
     palette: Union[str, Dict[str, ColorDef], None] = None,
     frame_index: int = 0,
+    pad_ragged: bool = False,
 ) -> Image.Image:
     """Render a validated ASCII character grid to a 1x RGBA PIL Image."""
-    lines = parse_grid_lines(grid, frame_index=frame_index)
+    lines = parse_grid_lines(grid, frame_index=frame_index, pad_ragged=pad_ragged)
     pal = get_palette(palette)
     h = len(lines)
     w = len(lines[0])
@@ -73,8 +141,10 @@ def render_grid(
         for x, ch in enumerate(row):
             if ch not in pal:
                 valid = "".join(sorted(k for k in pal if k != " "))
+                alt = ch.swapcase()
+                case_hint = f" Did you mean {alt!r}?" if alt in pal else ""
                 raise ValueError(
-                    f"[Frame {frame_index}] Undefined palette char {ch!r} at (x={x}, y={y}). "
+                    f"[Frame {frame_index}] Undefined palette char {ch!r} at (x={x}, y={y}).{case_hint} "
                     f"Defined chars: {valid!r}"
                 )
             pixels.append(pal[ch])

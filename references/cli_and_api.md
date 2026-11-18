@@ -20,6 +20,9 @@
 | `normalmap` | 生成 HD-2D 切线法线贴图、自发光遮罩、四向光检图与 360° 火把环绕 GIF | `python3 pforge.py normalmap knight.png --emit "#2CE8F5" -o work/hd2d/` |
 | `autorig` | 将纯色底多部件概念图自动去底、连通域拆件、统一锁色并生成可动 `Rig` 脚本 | `python3 pforge.py autorig boss_sheet.png --canvas 56x56 -o work/rig/` |
 | `aseprite-inspect` | 解码原生 `.aseprite` 二进制工程，渲染多图层时间轴拆解矩阵并可解包单层 PNG | `python3 pforge.py aseprite-inspect hero.aseprite --unpack-layers -o work/ase/` |
+| `palette-guide` | 输出内置色板或参考图的单字符语义速查表与明暗色阶链（`暗部->中间调->高光`） | `python3 pforge.py palette-guide endesga32` |
+| `build-spec` | 零 Python 脚本！直接从声明式 `.json` 构建单帧精灵或多部件/多动作分层角色 | `python3 pforge.py build-spec hero_spec.json -o work/hero/` |
+| `init-script` | 一键生成已自动绑定相对 `sys.path` 的可运行脚手架（`rig`\|`sprite`\|`scene`\|`iso`） | `python3 pforge.py init-script work/make_boss.py --template rig` |
 | `print-mcp-config` | 输出（或 `--write` 写入）当前路径解析好的 `mcp_config.json` 配置 | `python3 pforge.py print-mcp-config` |
 | `demo` | 运行内置史莱姆王多部件 + Sel-Out + 烟尘特效演示 | `python3 pforge.py demo -o output/demo` |
 
@@ -86,3 +89,13 @@
 - `write_aseprite(target, canvas_size, layers, durations_ms, palette=None, frame_tags=None, nine_slice_margins=None, pivots=None, use_linked_cels=False)`。
 - `read_aseprite(source) -> AsepriteDocument`：解析 `32/16/8-bit` `.ase`/`.aseprite` 二进制工程的图层、关联/压缩 Cel、帧时长、标签、色板与切片。
 - `generate_aseprite_layer_sheet(doc, title=..., scale=3) -> Image`：渲染可视化多图层时间轴拆解矩阵看板。
+
+### 8. Agent 零摩擦声明式引擎与开发体验增强（`agent_dx`, `canvas`, `rig`）
+- **容错 ASCII 网格语法**：支持 `|...|` 两侧对齐竖线、`//` 或 `# ` 整行/行尾注释、`normalize_grid(grid)` / `render_grid(..., pad_ragged=True)` 自动补齐不等长行，以及行列标尺与大小写拼写纠错提示。
+- **零算术部件吸附与一行动作预设**：
+  - `Rig.add_part(name, source, at="center"|"bottom_center"|"top_center", attach_to="torso", side="top"|"bottom"|"left"|"right"|"center", overlap=1, nudge=(dx,dy), hinge="center"|"neck"|"grip")`
+  - `Rig.animate_preset(preset="idle_breathe"|"float_bob"|"slime_bounce"|"melee_attack"|"hurt_flash") -> (frames, durations_ms, poses)`
+- `format_palette_guide(palette="endesga32") -> dict`：输出紧凑的单字符色阶链速查表（`cheat_sheet`）。
+- `build_from_spec(spec_dict_or_json_path, output_dir="output") -> dict`：支持 `canvas_size="auto"` 自动包围盒留边、多部件吸附、多动作预设、多图层 `.aseprite`、可选 `hd2d` 法线受光与 `agent_checklist` 一站式构建。
+- `build_agent_checklist(must_view_files, lint_report=..., auto_fixes=..., readability=...) -> dict`：将 Linter 与场景明度诊断翻译为带 `(x, y)` 坐标的一句话修复处方。
+- `scaffold_script(target_path, template="rig"|"sprite"|"scene"|"iso") -> dict`：生成免配环境路径的可运行脚手架脚本。

@@ -415,6 +415,44 @@ def _cmd_print_mcp_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_palette_guide(args: argparse.Namespace) -> int:
+    guide = format_palette_guide(palette=args.palette, max_colors=args.max_colors)
+    if args.json:
+        print(json.dumps(guide, indent=2, ensure_ascii=False))
+    else:
+        print(guide["cheat_sheet"])
+    return 0
+
+
+def _cmd_build_spec(args: argparse.Namespace) -> int:
+    res = build_from_spec(args.spec, output_dir=args.output_dir)
+    chk = res.get("agent_checklist", {})
+    print("MUST VIEW IMAGES:")
+    for p in chk.get("must_view_images", []):
+        print(f"  - {p}")
+    if chk.get("auto_healed"):
+        print("AUTO-HEALED:")
+        for n in chk["auto_healed"]:
+            print(f"  * {n}")
+    if chk.get("actionable_fixes"):
+        print("ACTIONABLE FIXES:")
+        for fx in chk["actionable_fixes"]:
+            print(f"  ! {fx}")
+    return 0
+
+
+def _cmd_init_script(args: argparse.Namespace) -> int:
+    info = scaffold_script(
+        target_path=args.output,
+        template=args.template,
+        name=args.name,
+        palette=args.palette,
+    )
+    print(f"Scaffolded [{info['template']}] starter script -> {info['script_path']}")
+    print(f"Run with: {info['run_command']}")
+    return 0
+
+
 def _cmd_demo(args: argparse.Namespace) -> int:
     out_dir = Path(args.output_dir)
     rig = Rig((32, 32), palette="endesga32", outline_mode="selout")
@@ -640,6 +678,27 @@ def build_cli_parser() -> argparse.ArgumentParser:
     s_mcp = sub.add_parser("print-mcp-config", help="Print or write ready-to-use mcp_config.json for PixelForge MCP Server.")
     s_mcp.add_argument("--write", default=None, help="Optional path to write mcp_config.json")
     s_mcp.set_defaults(func=_cmd_print_mcp_config)
+
+    # palette-guide
+    s_pg = sub.add_parser("palette-guide", help="Print compact single-char semantic palette & hue shading ramps for Agents.")
+    s_pg.add_argument("palette", nargs="?", default="endesga32", help="Built-in palette name or reference PNG/GIF path")
+    s_pg.add_argument("--max-colors", type=int, default=32)
+    s_pg.add_argument("--json", action="store_true", help="Output structured JSON instead of text cheat-sheet")
+    s_pg.set_defaults(func=_cmd_palette_guide)
+
+    # build-spec
+    s_bs = sub.add_parser("build-spec", help="Zero-script declarative JSON builder for ASCII sprites or multi-part Rigged characters.")
+    s_bs.add_argument("spec", help="Path to declarative .json spec file")
+    s_bs.add_argument("-o", "--output-dir", default=None, help="Override output directory")
+    s_bs.set_defaults(func=_cmd_build_spec)
+
+    # init-script
+    s_is = sub.add_parser("init-script", help="Scaffold a ready-to-run starter Python script (rig|sprite|scene|iso) with wired sys.path.")
+    s_is.add_argument("output", help="Target .py path (e.g. work/build_hero.py)")
+    s_is.add_argument("--template", choices=["rig", "sprite", "scene", "iso"], default="rig")
+    s_is.add_argument("--name", default="my_asset")
+    s_is.add_argument("--palette", default="endesga32")
+    s_is.set_defaults(func=_cmd_init_script)
 
     # demo
     s_dem = sub.add_parser("demo", help="Run built-in King Slime rig + Sel-out + VFX showcase.")

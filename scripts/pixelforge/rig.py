@@ -7,15 +7,17 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 from PIL import Image
 
-from .canvas import GridLike, render_grid
+from .canvas import GridLike, normalize_grid, render_grid
 from .palette import ColorDef, get_palette
 from .transform import (
+    add_ground_shadow,
     auto_outline,
     flash_image,
     flip_image,
     rotsprite,
     selective_outline,
 )
+from .vfx import composite_vfx, vfx_dust_puff, vfx_hit_spark, vfx_slash_arc
 
 PartSource = Union[Image.Image, GridLike, Mapping[str, Union[Image.Image, GridLike]]]
 
@@ -59,17 +61,112 @@ class Rig:
         self,
         name: str,
         source: PartSource,
-        offset: Tuple[int, int] = (0, 0),
+        offset: Optional[Tuple[int, int]] = None,
         pivot_local: Optional[Tuple[float, float]] = None,
         pivot_canvas: Optional[Tuple[float, float]] = None,
         z_index: int = 0,
         outline_group: Optional[int] = 0,
+        *,
+        at: Optional[str] = None,
+        attach_to: Optional[str] = None,
+        side: str = "top",
+        align: str = "center",
+        overlap: int = 1,
+        nudge: Tuple[int, int] = (0, 0),
+        hinge: Optional[str] = None,
     ) -> "Rig":
+        """Register a rig part via explicit `offset=(x, y)` OR zero-math semantic docking:
+        e.g. `at='center'` or `attach_to='torso', side='top'|'left'|'right'|'bottom', hinge='grip'`.
+        """
+        dummy_part = Part(name=name, source=source)
+        part_im = self._resolve_part_image(dummy_part)
+        w, h = part_im.size
+        cw, ch = self.canvas_size
+
+        if offset is not None:
+            ox, oy = offset
+        elif attach_to is not None:
+            if attach_to not in self.parts:
+                raise ValueError(f"attach_to parent {attach_to!r} must be added before {name!r}.")
+            parent = self.parts[attach_to]
+            pim = self._resolve_part_image(parent)
+            pw, ph = pim.size
+            px0, py0 = parent.offset
+
+            def _align_1d(p0: int, p_len: int, c_len: int) -> int:
+                if align == "start":
+                    return p0
+                if align == "end":
+                    return p0 + p_len - c_len
+                return p0 + (p_len - c_len) // 2
+
+            s_low = side.lower()
+            if s_low == "top":
+                ox, oy = _align_1d(px0, pw, w), py0 - h + overlap
+            elif s_low == "bottom":
+                ox, oy = _align_1d(px0, pw, w), py0 + ph - overlap
+            elif s_low == "left":
+                ox, oy = px0 - w + overlap, _align_1d(py0, ph, h)
+            elif s_low == "right":
+                ox, oy = px0 + pw - overlap, _align_1d(py0, ph, h)
+            elif s_low == "center":
+                ox, oy = px0 + (pw - w) // 2, py0 + (ph - h) // 2
+            else:
+                raise ValueError(f"Unknown attach side {side!r}; use top|bottom|left|right|center.")
+        elif at is not None:
+            a_low = at.lower()
+            if a_low == "center":
+                ox, oy = (cw - w) // 2, (ch - h) // 2
+            elif a_low == "bottom_center":
+                ox, oy = (cw - w) // 2, max(0, ch - h - 6)
+            elif a_low == "top_center":
+                ox, oy = (cw - w) // 2, 4
+            else:
+                raise ValueError(f"Unknown `at` anchor {at!r}; use center|bottom_center|top_center.")
+        else:
+            ox, oy = (0, 0)
+
+        final_offset = (ox + nudge[0], oy + nudge[1])
+
+        # Resolve semantic hinge if pivot_local not explicitly given
+        resolved_pivot_local = pivot_local
+        if resolved_pivot_local is None and pivot_canvas is None:
+            eff_hinge = hinge
+            if eff_hinge is None and attach_to is not None:
+                s_low = side.lower()
+                if any(k in name.lower() for k in ("sword", "weapon", "staff", "spear", "axe", "hammer")):
+                    eff_hinge = "grip"
+                elif s_low == "top":
+                    eff_hinge = "bottom"
+                elif s_low == "bottom":
+                    eff_hinge = "top"
+                elif s_low == "left":
+                    eff_hinge = "right"
+                elif s_low == "right":
+                    eff_hinge = "left"
+
+            if eff_hinge is not None:
+                hl = eff_hinge.lower()
+                if hl == "center":
+                    resolved_pivot_local = ((w - 1) / 2.0, (h - 1) / 2.0)
+                elif hl in ("bottom", "neck"):
+                    resolved_pivot_local = ((w - 1) / 2.0, float(max(0, h - 1)))
+                elif hl == "top":
+                    resolved_pivot_local = ((w - 1) / 2.0, 0.0)
+                elif hl in ("left", "shoulder_r"):
+                    resolved_pivot_local = (0.0, (h - 1) / 2.0)
+                elif hl in ("right", "shoulder_l"):
+                    resolved_pivot_local = (float(max(0, w - 1)), (h - 1) / 2.0)
+                elif hl == "grip":
+                    resolved_pivot_local = ((w - 1) * 0.4, (h - 1) * 0.78)
+                else:
+                    raise ValueError(f"Unknown hinge {eff_hinge!r}; use center|neck|bottom|top|left|right|grip.")
+
         self.parts[name] = Part(
             name=name,
             source=source,
-            offset=offset,
-            pivot_local=pivot_local,
+            offset=final_offset,
+            pivot_local=resolved_pivot_local,
             pivot_canvas=pivot_canvas,
             z_index=z_index,
             outline_group=outline_group,
@@ -89,7 +186,7 @@ class Rig:
             chosen = src
         if isinstance(chosen, Image.Image):
             return chosen.convert("RGBA")
-        return render_grid(chosen, palette=self.palette)
+        return render_grid(chosen, palette=self.palette, pad_ragged=True)
 
     def _part_canvas_pivot(self, part: Part, part_img: Image.Image) -> Tuple[float, float]:
         if part.pivot_canvas is not None:
@@ -318,6 +415,161 @@ class Rig:
             result.append((pname, p_frames))
         return result
 
+    def animate_preset(
+        self,
+        preset: str = "idle_breathe",
+        include_shadow: bool = True,
+        include_vfx: bool = True,
+        baseline_y: Optional[int] = None,
+    ) -> Tuple[List[Image.Image], List[int], List[Dict[str, Dict[str, Any]]]]:
+        """1-line motion generator: inspects registered part names and synthesizes `(frames, durations_ms, poses)`.
+        Available presets: `'idle_breathe'`, `'float_bob'`, `'slime_bounce'`, `'melee_attack'`, `'hurt_flash'`.
+        """
+        p_low = preset.strip().lower()
+        cw, ch = self.canvas_size
+
+        def _match(*keywords: str) -> List[str]:
+            return [pn for pn in self.parts if any(kw in pn.lower() for kw in keywords)]
+
+        bodies = _match("torso", "body", "hull", "base", "robe", "chest") or [next(iter(self.parts))]
+        heads = _match("head", "helmet", "face", "visor")
+        crests = _match("plume", "hat", "crown", "hair", "antenna", "horn")
+        capes = _match("cape", "cloak", "tail")
+        weapons = _match("sword", "weapon", "staff", "axe", "hammer", "spear", "blade", "arm_r", "right_arm")
+        shields = _match("shield", "arm_l", "left_arm")
+        wings_l = _match("wing_l", "thruster_l")
+        wings_r = _match("wing_r", "thruster_r")
+
+        poses: List[Dict[str, Dict[str, Any]]] = []
+        durs: List[int] = []
+
+        if p_low == "idle_breathe":
+            durs = [260, 180, 260, 180]
+            for f_i in range(4):
+                p: Dict[str, Dict[str, Any]] = {}
+                if f_i == 1:
+                    for n in heads + shields + weapons:
+                        p[n] = {"dy": 1}
+                    for n in wings_l:
+                        p[n] = {"angle": 5}
+                    for n in wings_r:
+                        p[n] = {"angle": -5}
+                elif f_i == 2:
+                    for n in bodies:
+                        p[n] = {"scale_y": 0.94, "dy": 1}
+                    for n in heads + shields + weapons + capes:
+                        p[n] = {"dy": 1}
+                    for n in crests:
+                        p[n] = {"dy": 2, "angle": -5}
+                    for n in wings_l:
+                        p[n] = {"angle": 9}
+                    for n in wings_r:
+                        p[n] = {"angle": -9}
+                elif f_i == 3:
+                    for n in crests:
+                        p[n] = {"dy": 1, "angle": 3}
+                    for n in capes:
+                        p[n] = {"angle": 4}
+                poses.append(p)
+
+        elif p_low == "float_bob":
+            durs = [220, 180, 220, 180]
+            dys = [0, -1, -3, -1]
+            for f_i, dy in enumerate(dys):
+                p = {pn: {"dy": dy} for pn in self.parts}
+                for n in crests + capes:
+                    p[n] = {"dy": dy + (1 if f_i == 1 else 0), "angle": (-4 if f_i == 2 else 3)}
+                for n in wings_l:
+                    p[n] = {"dy": dy, "angle": (8 if f_i in (1, 2) else -4)}
+                for n in wings_r:
+                    p[n] = {"dy": dy, "angle": (-8 if f_i in (1, 2) else 4)}
+                poses.append(p)
+
+        elif p_low == "slime_bounce":
+            durs = [200, 100, 75, 135, 75, 120]
+            specs = [
+                (1.0, 1.0, 0, 0),
+                (1.16, 0.84, 1, 2),
+                (0.88, 1.14, -4, -6),
+                (1.0, 1.0, -6, -8),
+                (0.95, 1.06, -2, -4),
+                (1.12, 0.88, 1, 1),
+            ]
+            for sx, sy, b_dy, c_dy in specs:
+                p = {}
+                for n in bodies:
+                    p[n] = {"scale_x": sx, "scale_y": sy, "dy": b_dy}
+                for n in heads + crests + weapons + shields:
+                    p[n] = {"dy": c_dy}
+                poses.append(p)
+
+        elif p_low == "melee_attack":
+            durs = [130, 150, 190, 45, 65, 150]
+            w_angles = [-25, -58, -72, 78, 86, 20]
+            body_dxs = [0, -2, -2, 3, 3, 1]
+            for f_i in range(6):
+                bx = body_dxs[f_i]
+                p = {pn: {"dx": bx} for pn in self.parts}
+                if f_i in (1, 2):
+                    for n in bodies:
+                        p[n] = {"dx": bx, "scale_x": 1.06, "scale_y": 0.94}
+                for n in heads:
+                    src = self.parts[n].source
+                    has_fierce = isinstance(src, Mapping) and ("fierce" in src or "alert" in src)
+                    var = "fierce" if (isinstance(src, Mapping) and "fierce" in src) else ("alert" if (isinstance(src, Mapping) and "alert" in src) else "default")
+                    p[n] = {"dx": bx, **({"variant": var} if has_fierce and f_i in (1, 2, 3, 4) else {})}
+                for n in weapons:
+                    p[n] = {"dx": bx + (2 if f_i in (3, 4) else -2 if f_i in (1, 2) else 0), "angle": w_angles[f_i]}
+                for n in wings_l:
+                    p[n] = {"dx": bx, "angle": (18 if f_i in (1, 2) else -12 if f_i in (3, 4) else 0)}
+                for n in wings_r:
+                    p[n] = {"dx": bx, "angle": (-18 if f_i in (1, 2) else 12 if f_i in (3, 4) else 0)}
+                poses.append(p)
+
+        elif p_low == "hurt_flash":
+            durs = [45, 75, 110, 140]
+            dxs = [-3, -4, -2, 0]
+            for f_i, dx in enumerate(dxs):
+                p = {}
+                for pn in self.parts:
+                    p[pn] = {"dx": dx, **({"flash_mix": 0.9} if f_i == 0 else {})}
+                poses.append(p)
+        else:
+            raise ValueError(
+                f"Unknown preset {preset!r}. Choose from: idle_breathe, float_bob, slime_bounce, melee_attack, hurt_flash."
+            )
+
+        base_f0 = self.render_pose({})
+        bbox0 = base_f0.getchannel("A").getbbox() or (0, 0, cw, ch)
+        by = baseline_y if baseline_y is not None else (bbox0[3] - 1)
+        cx = (bbox0[0] + bbox0[2]) // 2
+        base_sw = max(6, round((bbox0[2] - bbox0[0]) * 0.72))
+
+        raw_frames = [self.render_pose(p) for p in poses]
+        if include_shadow:
+            frames = []
+            for idx, rf in enumerate(raw_frames):
+                airborne = (p_low == "float_bob" and idx == 2) or (p_low == "slime_bounce" and idx in (2, 3))
+                sw = max(4, base_sw - 3) if airborne else base_sw
+                frames.append(add_ground_shadow(rf, baseline_y=by, center_x=cx, fixed_width=sw))
+        else:
+            frames = raw_frames
+
+        if include_vfx:
+            if p_low == "melee_attack":
+                slash = vfx_slash_arc((cw, ch), center=(min(cw - 8, cx + 4), (bbox0[1] + by) // 2), radius=max(8, cw // 4 + 2))
+                dust = vfx_dust_puff((cw, ch), origin=(max(4, cx - 3), by), direction="left")
+                frames = composite_vfx(frames, dust, start_frame=2, under=True)
+                frames = composite_vfx(frames, slash, start_frame=2, under=False)
+            elif p_low == "slime_bounce":
+                dust = vfx_dust_puff((cw, ch), origin=(cx, by), direction="both")
+                frames = composite_vfx(frames, dust, start_frame=1, under=True)
+            elif p_low == "hurt_flash":
+                spark = vfx_hit_spark((cw, ch), center=(cx, (bbox0[1] + by) // 2), radius=max(5, cw // 6))
+                frames = composite_vfx(frames, spark, start_frame=0, under=False)
+
+        return frames, durs, poses
+
 
 @dataclass
 class AnimationClip:
@@ -339,12 +591,28 @@ class AnimationClip:
         fps: int = 8,
         direction: str = "forward",
         loop: bool = True,
+        pad_ragged: bool = False,
     ) -> "AnimationClip":
         if not frames:
             raise ValueError(f"Clip {name!r} must contain at least 1 frame.")
+        proc_frames: List[Union[Image.Image, List[str]]] = []
+        if pad_ragged and all(not isinstance(f, Image.Image) for f in frames):
+            norm_grids = [normalize_grid(f)[0] for f in frames]  # type: ignore[arg-type]
+            max_w = max(len(g[0]) for g in norm_grids)
+            max_h = max(len(g) for g in norm_grids)
+            for g in norm_grids:
+                padded_rows = [r + ("." * (max_w - len(r))) for r in g]
+                while len(padded_rows) < max_h:
+                    padded_rows.append("." * max_w)
+                proc_frames.append(padded_rows)
+        else:
+            proc_frames = list(frames)  # type: ignore[assignment]
+
         rendered = [
-            f.convert("RGBA") if isinstance(f, Image.Image) else render_grid(f, palette=palette, frame_index=i)
-            for i, f in enumerate(frames)
+            f.convert("RGBA")
+            if isinstance(f, Image.Image)
+            else render_grid(f, palette=palette, frame_index=i, pad_ragged=pad_ragged)
+            for i, f in enumerate(proc_frames)
         ]
         fw, fh = rendered[0].size
         if any(im.size != (fw, fh) for im in rendered):

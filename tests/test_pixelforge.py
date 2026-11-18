@@ -402,13 +402,46 @@ class TestPixelForgeSuite(unittest.TestCase):
                         },
                     },
                 },
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "pixelforge_palette_guide",
+                        "arguments": {"palette": "sweetie16"},
+                    },
+                },
+                {
+                    "jsonrpc": "2.0",
+                    "id": 6,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "pixelforge_build_rig",
+                        "arguments": {
+                            "name": "mcp_paladin",
+                            "canvas_size": "auto",
+                            "parts": [
+                                {"name": "torso", "at": "center", "grid": ["|..BBBB..| # armor", "|BBBBBBBB", "|.bbbbbb."]},
+                                {"name": "head", "attach_to": "torso", "side": "top", "grid": ["|.1111.|", "|1KKKK1|", "|.2222.|"]},
+                                {"name": "sword", "attach_to": "torso", "side": "right", "hinge": "grip", "outline_group": 1, "grid": [".W.", ".1.", "YYY", ".o."]},
+                            ],
+                            "clips": {"idle": "idle_breathe", "attack": "melee_attack"},
+                            "output_dir": str(Path(tmp) / "rig_out"),
+                        },
+                    },
+                },
             ]
-            out_str, _ = proc.communicate("\n".join(json.dumps(m) for m in msgs) + "\n", timeout=15)
+            out_str, _ = proc.communicate("\n".join(json.dumps(m) for m in msgs) + "\n", timeout=25)
             lines = [json.loads(line) for line in out_str.strip().splitlines() if line.strip()]
-            # Notification has no id -> exactly 4 responses for ids 1, 2, 3, 4
-            self.assertEqual([r["id"] for r in lines], [1, 2, 3, 4])
+            # Notification has no id -> exactly 6 responses for ids 1..6
+            self.assertEqual([r["id"] for r in lines], [1, 2, 3, 4, 5, 6])
+            self.assertIn("pixelforge_palette_guide", lines[0]["result"]["instructions"])
             tool_names = {t["name"] for t in lines[1]["result"]["tools"]}
+            self.assertEqual(len(tool_names), 12)
             self.assertIn("pixelforge_build", tool_names)
+            self.assertIn("pixelforge_build_rig", tool_names)
+            self.assertIn("pixelforge_palette_guide", tool_names)
+            self.assertIn("pixelforge_scene_check", tool_names)
             self.assertIn("pixelforge_aseprite_inspect", tool_names)
             self.assertFalse(lines[2]["result"]["isError"])
             # Response 4 has both text JSON and inline base64 PNG image content!
@@ -416,6 +449,90 @@ class TestPixelForgeSuite(unittest.TestCase):
             self.assertEqual(len(c4), 2)
             self.assertEqual(c4[1]["type"], "image")
             self.assertEqual(c4[1]["mimeType"], "image/png")
+            # Response 5: palette guide
+            g5 = json.loads(lines[4]["result"]["content"][0]["text"])
+            self.assertEqual(g5["palette_name"], "sweetie16")
+            self.assertIn("Hue Shading Ramps", g5["cheat_sheet"])
+            # Response 6: zero-script multi-part rig -> multi-layer .aseprite
+            r6 = json.loads(lines[5]["result"]["content"][0]["text"])
+            self.assertFalse(lines[5]["result"]["isError"])
+            self.assertIn("master_aseprite", r6)
+            ase_doc = pf.read_aseprite(r6["master_aseprite"])
+            self.assertEqual([l["name"] for l in ase_doc.layers], ["torso", "head", "sword"])
+            self.assertGreater(len(r6["agent_checklist"]["auto_healed"]), 0)
+
+    def test_forgiving_grid_pipes_comments_and_ragged_healing(self) -> None:
+        raw = "\n".join([
+            "# Header comment ignored",
+            "// Another comment line",
+            "|..BB..|  # top edge",
+            "|.BBBB.|  # mid",
+            "|..bb",  # intentionally ragged (missing 2 trailing '.' and closing '|')
+        ])
+        norm_lines, notes = pf.normalize_grid(raw)
+        self.assertEqual(norm_lines, ["..BB..", ".BBBB.", "..bb.."])
+        self.assertEqual(len(notes), 1)
+
+        im = pf.render_grid(raw, palette="endesga32", pad_ragged=True)
+        self.assertEqual(im.size, (6, 3))
+
+        # Swapcase hint when palette has uppercase 'W' but lowercase 'w' is undefined in sweetie16
+        with self.assertRaisesRegex(ValueError, "Did you mean 'W'"):
+            pf.render_grid(["..w."], palette="sweetie16")
+
+    def test_semantic_rig_docking_presets_and_spec_builder(self) -> None:
+        guide = pf.format_palette_guide("endesga32")
+        self.assertEqual(guide["color_count"], 32)
+        self.assertEqual(guide["darkest_outline"]["char"], "K")
+
+        spec = {
+            "name": "ember_guard",
+            "palette": "endesga32",
+            "canvas_size": "auto",
+            "outline_mode": "selout",
+            "parts": [
+                {"name": "torso", "at": "center", "grid": ["..RRRR..", ".RYYYYR.", "RRRRRRRR", ".rrrrrr."]},
+                {"name": "head", "attach_to": "torso", "side": "top", "grid": [".1111.", "1KKKK1", ".2222."]},
+                {"name": "sword", "attach_to": "torso", "side": "right", "hinge": "grip", "outline_group": 1, "grid": [".W.", ".1.", "YYY", ".o."]},
+            ],
+            "clips": {
+                "idle": "idle_breathe",
+                "float": "float_bob",
+                "bounce": "slime_bounce",
+                "attack": "melee_attack",
+                "hit": "hurt_flash",
+            },
+            "hd2d": {"emissive_colors": ["#FEAE34"]},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            spec_file = Path(tmp) / "spec.json"
+            spec_file.write_text(json.dumps(spec), encoding="utf-8")
+            self.assertEqual(pf.main(["build-spec", str(spec_file), "-o", str(Path(tmp) / "out")]), 0)
+            master_ase = Path(tmp) / "out" / "ember_guard_master.aseprite"
+            self.assertTrue(master_ase.is_file())
+            doc = pf.read_aseprite(master_ase)
+            self.assertEqual([t["name"] for t in doc.tags], ["idle", "float", "bounce", "attack", "hit"])
+            self.assertTrue((Path(tmp) / "out" / "ember_guard_hd2d_normal.png").is_file())
+
+    def test_scaffold_script_all_templates_runnable(self) -> None:
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            for tpl in ("rig", "sprite", "scene", "iso"):
+                script_path = Path(tmp) / tpl / f"run_{tpl}.py"
+                self.assertEqual(
+                    pf.main(["init-script", str(script_path), "--template", tpl, "--name", f"test_{tpl}"]),
+                    0,
+                )
+                self.assertTrue(script_path.is_file())
+                completed = subprocess.run(
+                    [sys.executable, str(script_path)],
+                    capture_output=True,
+                    text=True,
+                    timeout=20,
+                    check=False,
+                )
+                self.assertEqual(completed.returncode, 0, msg=f"Template {tpl} failed:\n{completed.stderr}")
+                self.assertIn("MUST VIEW:", completed.stdout)
 
 
 if __name__ == "__main__":

@@ -162,6 +162,7 @@ def build_pixel_asset(
     named_layers: Optional[Sequence[Tuple[str, Sequence[Optional[Image.Image]]]]] = None,
     formats: Sequence[str] = ("gif", "apng", "webp", "aseprite"),
     output_dir: Union[str, Path] = "output",
+    pad_ragged: bool = False,
 ) -> Dict[str, Any]:
     """Render, lint, inspect, and export a static or animated pixel-art asset."""
     _validate_asset_name(name)
@@ -174,6 +175,7 @@ def build_pixel_asset(
         palette=palette,
         durations_ms=durations_ms,
         fps=fps,
+        pad_ragged=pad_ragged,
     )
     rendered = clip.frames
     durs = clip.durations_ms

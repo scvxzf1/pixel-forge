@@ -22,9 +22,26 @@ if str(_SCRIPTS_DIR) not in sys.path:
 import pixelforge as pf  # noqa: E402
 
 SERVER_NAME = "pixelforge-mcp"
-SERVER_VERSION = "1.5.0"
+SERVER_VERSION = "1.6.0"
 SUPPORTED_PROTOCOLS = {"2024-11-05", "2025-03-26", "2025-06-18"}
 DEFAULT_PROTOCOL = "2025-03-26"
+
+SERVER_INSTRUCTIONS = (
+    "PixelForge Zero-Friction Agent Workflow:\n"
+    "1. Palette Lookup: Call `pixelforge_palette_guide` first to see exact single-char shading ramps "
+    "(shadow -> midtone -> highlight, '.' = transparent) instead of guessing palette characters.\n"
+    "2. Zero-Script Creation:\n"
+    "   - Icons / Simple Sprites (16x16..32x32): Use `pixelforge_build` (supports optional `|...|` row pipes, "
+    "inline `# comments`, `pad_ragged=true` row-width auto-healing, and `outline_mode='selout'`).\n"
+    "   - Multi-Part Characters / Bosses / Multi-Action Animations: Use `pixelforge_build_rig` with compact "
+    "un-outlined ASCII `parts` (`at='center'`, `attach_to='torso'`, `side='top'|'right'`, `hinge='grip'`), "
+    "`canvas_size='auto'`, and 1-line `clips` presets (`'idle_breathe'`, `'float_bob'`, `'slime_bounce'`, "
+    "`'melee_attack'`, `'hurt_flash'`). Exports multi-layer `.aseprite` + GIF/APNG/WebP automatically!\n"
+    "3. Surgical Edits: Never redraw a large sprite from scratch—call `pixelforge_region_patch` "
+    "(`action='extract'` -> edit small ASCII slice -> `action='apply'`).\n"
+    "4. Mandatory Visual QA: Every tool returns `agent_checklist.must_view_images`. You MUST view those "
+    "`*_inspect.png` / `*_diff.png` sheets with your vision/file-reading tool before delivering!"
+)
 
 
 def _encode_png_base64(path: Union[str, Path]) -> str:
@@ -33,10 +50,29 @@ def _encode_png_base64(path: Union[str, Path]) -> str:
 
 TOOLS_SCHEMA: List[Dict[str, Any]] = [
     {
+        "name": "pixelforge_palette_guide",
+        "description": (
+            "Get a compact single-char semantic palette & hue shading ramp cheat-sheet "
+            "(shadow -> midtone -> highlight, outline char, transparent char) for a built-in palette "
+            "(endesga32|pico8|sweetie16|resurrect64|gameboy|mono1bit) or extracted from a reference image."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "palette": {
+                    "type": "string",
+                    "default": "endesga32",
+                    "description": "Built-in palette name or path to a reference PNG/GIF.",
+                },
+                "max_colors": {"type": "integer", "default": 32},
+            },
+        },
+    },
+    {
         "name": "pixelforge_inspect",
         "description": (
             "Generate a Holistic Visual Inspection Sheet (palette legend, 0-based X/Y grid, "
-            "dark/light clean previews, silhouette & onion-skin) + Pixel Linter diagnostics for any "
+            "dark/light clean previews, silhouette & onion-skin) + Pixel Linter + Agent QA Checklist for any "
             "PNG, GIF, APNG, WebP, Spritesheet, or .aseprite file."
         ),
         "inputSchema": {
@@ -56,7 +92,8 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         "name": "pixelforge_build",
         "description": (
             "Render ASCII character grid frame(s) into PNG, GIF, APNG, Lossless WebP, Aseprite JSON, "
-            "native .aseprite project, and Holistic Inspection Sheet."
+            "native .aseprite project, and Holistic Inspection Sheet. Supports forgiving `|...|` row borders, "
+            "`# inline comments`, `pad_ragged=true` row-width healing, and `outline_mode='selout'|'outer'`."
         ),
         "inputSchema": {
             "type": "object",
@@ -64,7 +101,7 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
                 "name": {"type": "string", "description": "Asset filename stem (e.g. 'fire_slime')."},
                 "frames": {
                     "type": "array",
-                    "description": "List of ASCII grids (each frame is either a newline-joined string or array of equal-width row strings).",
+                    "description": "List of ASCII grids (string or row array; '.' or ' ' = transparent).",
                     "items": {"oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
                 },
                 "palette": {
@@ -76,10 +113,83 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
                     "oneOf": [{"type": "integer"}, {"type": "array", "items": {"type": "integer"}}],
                     "description": "Single ms int or per-frame ms array (e.g. [200, 120, 45, 140]).",
                 },
+                "pad_ragged": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Auto-pad ragged ASCII rows with trailing '.' instead of failing on row length typos.",
+                },
+                "outline_mode": {
+                    "type": "string",
+                    "enum": ["none", "outer", "selout"],
+                    "default": "none",
+                    "description": "Optional automatic 1px outer or selective-shaded outline around un-outlined ASCII fills.",
+                },
+                "add_shadow": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Add a semi-transparent ground contact shadow ellipse beneath the sprite.",
+                },
                 "output_dir": {"type": "string", "default": "output/mcp_build"},
                 "include_inline_image": {"type": "boolean", "default": False},
             },
             "required": ["name", "frames"],
+        },
+    },
+    {
+        "name": "pixelforge_build_rig",
+        "description": (
+            "Zero-script multi-part articulated character/boss builder! Define compact local ASCII `parts` "
+            "using semantic docking (`at='center'`, `attach_to='torso'`, `side='top'|'bottom'|'left'|'right'`, "
+            "`hinge='grip'|'neck'`) + `clips` motion presets (`'idle_breathe'`, `'float_bob'`, `'slime_bounce'`, "
+            "`'melee_attack'`, `'hurt_flash'` or custom `poses`). Auto-sizes canvas, applies unified Sel-Out "
+            "outlining, and exports GIF/APNG/WebP + multi-layer binary `.aseprite` + Layer Breakdown Sheet!"
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Character/asset stem (e.g. 'flame_knight')."},
+                "palette": {
+                    "oneOf": [{"type": "string"}, {"type": "object"}],
+                    "default": "endesga32",
+                },
+                "canvas_size": {
+                    "oneOf": [
+                        {"type": "string", "enum": ["auto"]},
+                        {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+                    ],
+                    "default": "auto",
+                    "description": "'auto' (recommended: auto-fits parts + swing margin) or explicit [W, H].",
+                },
+                "outline_mode": {
+                    "type": "string",
+                    "enum": ["selout", "outer", "none"],
+                    "default": "selout",
+                },
+                "parts": {
+                    "type": "array",
+                    "description": (
+                        "Ordered parts list. Each item: {name, grid (or variants), at?: 'center'|'bottom_center', "
+                        "attach_to?: parent_name, side?: 'top'|'bottom'|'left'|'right'|'center', overlap?: 1, "
+                        "nudge?: [dx,dy], hinge?: 'center'|'neck'|'grip'|'top'|'bottom'|'left'|'right', "
+                        "z_index?: int, outline_group?: int|null}."
+                    ),
+                    "items": {"type": "object"},
+                },
+                "clips": {
+                    "type": "object",
+                    "description": (
+                        "Map of {clip_name: preset_or_pose_dict}, e.g. "
+                        "{'idle': 'idle_breathe', 'attack': 'melee_attack', 'hit': 'hurt_flash'}."
+                    ),
+                },
+                "hd2d": {
+                    "oneOf": [{"type": "boolean"}, {"type": "object"}],
+                    "description": "Set true or {emissive_colors: ['#2CE8F5']} to also export Normal Map + 360 Torch GIF.",
+                },
+                "output_dir": {"type": "string", "default": "output/mcp_rig"},
+                "include_inline_image": {"type": "boolean", "default": False},
+            },
+            "required": ["name", "parts"],
         },
     },
     {
@@ -129,7 +239,7 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
                 },
                 "patch_grid": {
                     "oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}],
-                    "description": "Edited ASCII grid for action='apply'.",
+                    "description": "Edited ASCII grid for action='apply' (supports `|...|` pipes & `#` comments).",
                 },
                 "mode": {"type": "string", "enum": ["replace", "alpha_over"], "default": "replace"},
                 "palette": {"oneOf": [{"type": "string"}, {"type": "object"}]},
@@ -208,6 +318,23 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "pixelforge_scene_check",
+        "description": (
+            "Run a 4-panel Grayscale Squint + 3-Slab Value Posterization + Readability diagnostic on any "
+            "scene or mockup PNG/GIF to verify foreground vs. background value separation."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path to scene mockup PNG/GIF."},
+                "scale": {"type": "integer", "default": 2},
+                "output_dir": {"type": "string", "default": "output/mcp_scene_check"},
+                "include_inline_image": {"type": "boolean", "default": False},
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "pixelforge_aseprite_inspect",
         "description": (
             "Read a native binary .ase / .aseprite file, inspect its independent layers, frame durations, "
@@ -229,6 +356,13 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
 
 def _execute_tool(name: str, args: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[str]]:
     """Execute tool logic and return `(json_payload, optional_inline_png_path)`."""
+    if name == "pixelforge_palette_guide":
+        guide = pf.format_palette_guide(
+            palette=args.get("palette", "endesga32"),
+            max_colors=int(args.get("max_colors", 32)),
+        )
+        return guide, None
+
     if name == "pixelforge_inspect":
         frames, durs, dk = pf.load_frames_from_file(
             args["path"],
@@ -251,19 +385,39 @@ def _execute_tool(name: str, args: Dict[str, Any]) -> Tuple[Dict[str, Any], Opti
             "palette": pal,
             "palette_ramps": pf.analyze_palette_ramps(pal),
             "lint": lint_rep,
+            "agent_checklist": pf.build_agent_checklist([ins_path], lint_report=lint_rep),
         }
         return payload, (str(ins_path) if args.get("include_inline_image") else None)
 
     if name == "pixelforge_build":
-        meta = pf.build_pixel_asset(
-            name=args["name"],
-            frames=args["frames"],
-            palette=args.get("palette", "endesga32"),
-            durations_ms=args.get("durations_ms"),
-            output_dir=args.get("output_dir", "output/mcp_build"),
-        )
+        spec_payload = {
+            "name": args["name"],
+            "frames": args["frames"],
+            "palette": args.get("palette", "endesga32"),
+            "durations_ms": args.get("durations_ms"),
+            "pad_ragged": bool(args.get("pad_ragged", True)),
+            "outline_mode": args.get("outline_mode", "none"),
+            "add_shadow": bool(args.get("add_shadow", False)),
+        }
+        meta = pf.build_from_spec(spec_payload, output_dir=args.get("output_dir", "output/mcp_build"))
         ins = meta["files"]["inspect_sheet"]
         return meta, (ins if args.get("include_inline_image") else None)
+
+    if name == "pixelforge_build_rig":
+        spec_payload = {
+            "name": args["name"],
+            "palette": args.get("palette", "endesga32"),
+            "canvas_size": args.get("canvas_size", "auto"),
+            "outline_mode": args.get("outline_mode", "selout"),
+            "parts": args["parts"],
+            "clips": args.get("clips"),
+            "hd2d": args.get("hd2d"),
+            "pad_ragged": True,
+        }
+        res = pf.build_from_spec(spec_payload, output_dir=args.get("output_dir", "output/mcp_rig"))
+        must_imgs = res.get("agent_checklist", {}).get("must_view_images", [])
+        inline_target = must_imgs[0] if (args.get("include_inline_image") and must_imgs) else None
+        return res, inline_target
 
     if name == "pixelforge_decompile":
         pal_arg = None if args.get("palette") in (None, "auto") else args.get("palette")
@@ -275,6 +429,7 @@ def _execute_tool(name: str, args: Dict[str, Any]) -> Tuple[Dict[str, Any], Opti
             palette=pal_arg,
             max_colors=int(args.get("max_colors", 48)),
         )
+        bundle["agent_checklist"] = pf.build_agent_checklist([bundle.get("inspect_sheet", "")])
         return bundle, None
 
     if name == "pixelforge_region_patch":
@@ -298,13 +453,15 @@ def _execute_tool(name: str, args: Dict[str, Any]) -> Tuple[Dict[str, Any], Opti
                 "palette": pal_dict,
                 "grid": sub_grid,
                 "inspect_sheet": str(ins_file),
+                "agent_checklist": pf.build_agent_checklist([ins_file]),
             }
             return res, (str(ins_file) if args.get("include_inline_image") else None)
         else:
             ax, ay = [int(v) for v in args["at"]]
+            norm_patch, patch_notes = pf.normalize_grid(args["patch_grid"])
             patched = pf.patch_region_image(
                 base_img,
-                args["patch_grid"],
+                norm_patch,
                 ax,
                 ay,
                 palette=pal_dict,
@@ -316,7 +473,16 @@ def _execute_tool(name: str, args: Dict[str, Any]) -> Tuple[Dict[str, Any], Opti
             seq = list(frames)
             seq[f_idx] = patched
             meta = pf.build_pixel_asset(f"{stem}_patched", seq, palette=pal_dict, durations_ms=durs, output_dir=out)
-            res = {"diff_sheet": str(diff_file), "diff_stats": diff_stats, "asset": meta}
+            res = {
+                "diff_sheet": str(diff_file),
+                "diff_stats": diff_stats,
+                "asset": meta,
+                "agent_checklist": pf.build_agent_checklist(
+                    [diff_file, meta["files"]["inspect_sheet"]],
+                    lint_report=meta["lint"],
+                    auto_fixes=patch_notes,
+                ),
+            }
             return res, (str(diff_file) if args.get("include_inline_image") else None)
 
     if name == "pixelforge_recolor":
@@ -330,7 +496,15 @@ def _execute_tool(name: str, args: Dict[str, Any]) -> Tuple[Dict[str, Any], Opti
         diff_file = out / f"{stem}_recolor_diff.png"
         diff_im.save(diff_file)
         meta = pf.build_pixel_asset(f"{stem}_recolored", recolored, palette=pal, durations_ms=durs, output_dir=out)
-        return {"diff_sheet": str(diff_file), "diff_stats": stats, "asset": meta}, None
+        return {
+            "diff_sheet": str(diff_file),
+            "diff_stats": stats,
+            "asset": meta,
+            "agent_checklist": pf.build_agent_checklist(
+                [diff_file, meta["files"]["inspect_sheet"]],
+                lint_report=meta["lint"],
+            ),
+        }, None
 
     if name == "pixelforge_pixelate":
         pal = None if args.get("palette") in (None, "auto") else args.get("palette")
@@ -343,11 +517,14 @@ def _execute_tool(name: str, args: Dict[str, Any]) -> Tuple[Dict[str, Any], Opti
             output_dir=args.get("output_dir", "output/mcp_pixelate"),
             name=f"{Path(args['path']).stem}_pixelated",
         )
+        fdict = px_res.get("files", {})
+        must = [p for k, p in fdict.items() if k in ("compare_sheet", "inspect_sheet")]
         return {
             "name": px_res["name"],
             "palette": px_res["palette"],
             "grid": px_res["grid"],
-            "files": px_res.get("files", {}),
+            "files": fdict,
+            "agent_checklist": pf.build_agent_checklist(must),
         }, None
 
     if name == "pixelforge_autotile":
@@ -367,6 +544,7 @@ def _execute_tool(name: str, args: Dict[str, Any]) -> Tuple[Dict[str, Any], Opti
             output_dir=args.get("output_dir", "output/mcp_autotile"),
             sample_map=args.get("sample_map"),
         )
+        files["agent_checklist"] = pf.build_agent_checklist([files.get("inspect_sheet", "")])  # type: ignore[assignment]
         return files, None
 
     if name == "pixelforge_hd2d_normal":
@@ -380,7 +558,32 @@ def _execute_tool(name: str, args: Dict[str, Any]) -> Tuple[Dict[str, Any], Opti
             bump_strength=float(args.get("bump_strength", 2.2)),
             output_dir=args.get("output_dir", "output/mcp_hd2d"),
         )
+        files["agent_checklist"] = pf.build_agent_checklist(  # type: ignore[assignment]
+            [files.get("inspect_sheet", ""), files.get("torch_orbit_gif", "")]
+        )
         return files, None
+
+    if name == "pixelforge_scene_check":
+        frames, _, _ = pf.load_frames_from_file(args["path"], auto_downscale_native=False)
+        frame0 = frames[0]
+        rep = pf.analyze_scene_readability(frame0, frame0, {})
+        out = Path(args.get("output_dir", "output/mcp_scene_check"))
+        out.mkdir(parents=True, exist_ok=True)
+        stem = Path(args["path"]).stem
+        sheet_path = out / f"{stem}_value_check.png"
+        pf.generate_scene_value_sheet(
+            frame0,
+            rep,
+            title=f"Value Check: {stem}",
+            scale=int(args.get("scale", 2)),
+        ).save(sheet_path)
+        clean_rep = {k: v for k, v in rep.items() if not k.startswith("_")}
+        res = {
+            "value_check_sheet": str(sheet_path),
+            "readability": clean_rep,
+            "agent_checklist": pf.build_agent_checklist([sheet_path], readability=clean_rep),
+        }
+        return res, (str(sheet_path) if args.get("include_inline_image") else None)
 
     if name == "pixelforge_aseprite_inspect":
         doc = pf.read_aseprite(args["path"])
@@ -405,6 +608,7 @@ def _execute_tool(name: str, args: Dict[str, Any]) -> Tuple[Dict[str, Any], Opti
 
         summary = doc.summary_dict()
         summary["layer_breakdown_sheet"] = str(breakdown_path)
+        summary["agent_checklist"] = pf.build_agent_checklist([breakdown_path])
         if unpacked:
             summary["unpacked_layer_files"] = unpacked
         return summary, (str(breakdown_path) if args.get("include_inline_image") else None)
@@ -437,6 +641,7 @@ def handle_jsonrpc_message(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                     "name": SERVER_NAME,
                     "version": SERVER_VERSION,
                 },
+                "instructions": SERVER_INSTRUCTIONS,
             },
         }
 

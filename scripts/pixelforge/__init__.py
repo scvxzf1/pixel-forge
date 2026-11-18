@@ -31,6 +31,7 @@ from .canvas import (
     extract_region_grid,
     extract_region_image,
     image_to_grid,
+    normalize_grid,
     parse_grid_lines,
     patch_region_grid,
     patch_region_image,
@@ -126,6 +127,12 @@ from .aseprite_io import (
     read_aseprite,
     write_aseprite,
 )
+from .agent_dx import (
+    build_agent_checklist,
+    build_from_spec,
+    format_palette_guide,
+    scaffold_script,
+)
 
 __all__ = [
     "SAFE_ASCII_CHARS",
@@ -151,6 +158,7 @@ __all__ = [
     "analyze_palette_ramps",
     "remap_grid_chars",
     "recolor_image",
+    "normalize_grid",
     "parse_grid_lines",
     "render_grid",
     "image_to_grid",
@@ -234,4 +242,8 @@ __all__ = [
     "write_aseprite",
     "read_aseprite",
     "generate_aseprite_layer_sheet",
+    "format_palette_guide",
+    "build_agent_checklist",
+    "build_from_spec",
+    "scaffold_script",
 ]

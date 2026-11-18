@@ -95,7 +95,7 @@
 
 ### 10. 原生 `.aseprite` 二进制分层工程双向读写 + 零依赖 MCP Server（`aseprite_io.py` / `pforge_mcp.py`）
 - **双向 `.aseprite` 二进制引擎**：无需本机安装 Aseprite，纯 Python 按 v1.3 规范直接读写 `.ase` / `.aseprite` 源文件，完整保留**独立部件图层（`0x2004`）、Zlib 压缩与关联 Cel（`0x2005`）、可变帧毫秒时长、动作标签（`idle` / `attack`）、命名 RGBA 调色板与关节轴心 Slice（`0x2022`）**。示例生成的 8 图层源文件见 [`docs/showcase/azure_knight_layered.aseprite`](docs/showcase/azure_knight_layered.aseprite)。
-- **零外部依赖 MCP Server**：`scripts/pforge_mcp.py` 原生实现 JSON-RPC 2.0 Stdio 协议（无需额外安装 `mcp` 包），向智能体暴露 `pixelforge_build`、`pixelforge_inspect`、`pixelforge_region_patch`、`pixelforge_aseprite_inspect` 等 9 个工具。
+- **零外部依赖 MCP Server 与 Agent 零摩擦 DX（`pforge_mcp.py` / `agent_dx.py`）**：`scripts/pforge_mcp.py` 原生实现 JSON-RPC 2.0 Stdio 协议（无需额外安装 `mcp` 包，支持 `InitializeResult.instructions` 自动工作流注入），暴露 `pixelforge_palette_guide`、`pixelforge_build`、`pixelforge_build_rig`（零脚本语义关节吸附 + 自动画布尺寸 + 一行动作预设直出多图层 `.aseprite`）、`pixelforge_region_patch`、`pixelforge_scene_check`、`pixelforge_aseprite_inspect` 等 **12 个工具**；同时支持 `|...| # 行尾注释` 容错网格、`pad_ragged` 自动补齐行宽与 `agent_checklist` 逐坐标修复处方。
 
 ![Decoded Aseprite 8-Layer Timeline Matrix](docs/showcase/azure_knight_layered_layers_inspect.png)
 
@@ -132,8 +132,9 @@ pixel-forge/
 ├── mcp_config.example.json         # MCP Server 配置模板
 ├── scripts/
 │   ├── pforge.py                   # 统一 CLI 命令行工具 & Python 顶层 API 入口
-│   ├── pforge_mcp.py               # 零外部依赖 MCP Stdio Server（暴露 9 个原生像素工具）
+│   ├── pforge_mcp.py               # 零外部依赖 MCP Stdio Server（暴露 12 个零脚本原生像素工具）
 │   └── pixelforge/                 # 模块化核心引擎
+│       ├── agent_dx.py             # Agent 易用性层：色阶速查、零脚本声明式构建(build_from_spec)、QA修复处方、脚手架生成
 │       ├── palette.py              # 6套经典色板、参考图吸色、HSV语义键分配、色相偏移明暗色阶、一键换色
 │       ├── canvas.py               # ASCII网格编解码、局部切片精修(Patch)、抗锯齿几何画布与Bayer有序抖动
 │       ├── importer.py             # PNG/GIF/APNG/WebP/精灵表逆向反编译、8x预览图自动无损还原、AI图像素化

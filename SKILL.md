@@ -25,7 +25,26 @@ description: >-
 
 ---
 
-## 二、四大标准工作流
+## 二、Agent 零摩擦最短路径决策树（优先零脚本直出！）
+
+动手前按以下优先级选择最省 Token、零样板代码的调用方式：
+
+1. **查色板单字符色阶（杜绝猜错字符报错）**：
+   - MCP：`pixelforge_palette_guide(palette="endesga32")`；CLI：`python3 <SKILL_DIR>/scripts/pforge.py palette-guide endesga32`
+   - 直接获取按色相分组的 `暗部 -> 中间调 -> 高光` 字符链（如 `'b' -> 'B' -> 'C'`），无需翻表猜测。
+2. **多部件角色 / Boss / 多动作分层 `.aseprite`（0 行 Python 代码，零算术吸附）**：
+   - MCP 直调 **`pixelforge_build_rig`**（或 CLI `pforge.py build-spec spec.json` / Python `build_from_spec(spec)`）：
+     - **容错网格语法**：支持 `|..BBBB..|  # 行尾注释` 视觉对齐竖线与 `pad_ragged=True` 自动补齐漏写的末尾 `.`！
+     - **语义关节吸附（免算坐标与轴心）**：主躯干设 `at="center"`，其余部件直接写 `attach_to="torso", side="top"|"left"|"right"|"bottom", hinge="grip"`，`canvas_size="auto"` 自动测算全身包围盒并预留挥剑防裁切边距。
+     - **一行动作预设**：`clips={"idle": "idle_breathe", "attack": "melee_attack", "hit": "hurt_flash"}`（还支持 `"float_bob"`、`"slime_bounce"` 或自定义 `poses`），自动附带刀光/烟尘特效、阴影与多图层 `.aseprite`！
+3. **16x16～32x32 图标与单帧小物件**：
+   - MCP 直调 **`pixelforge_build`**（支持直接画无描边色块并传 `outline_mode="selout", add_shadow=True` 自动包边加阴影）。
+4. **复杂程序化几何 / 等轴测 / 实机战斗沙盒脚本**：
+   - 先运行 `python3 <SKILL_DIR>/scripts/pforge.py init-script work/run.py --template rig|sprite|scene|iso` 一键生成自动配好相对 `sys.path` 的可运行脚手架，再填入逻辑（免去手写路径拼接排错）。
+
+---
+
+## 三、六大标准工作流
 
 ### 1. 从零构建像素画与多动作动画
 1. **选定调色板**：优先选用内置经典色板 `"endesga32"`、`"pico8"`、`"sweetie16"`、`"resurrect64"`、`"gameboy"`，或用 `pforge.py palette <ref.png>` 提取参考图色板与色阶。默认左上光源（左上高光暖移、右下暗部冷移），推荐开启 `outline_mode="selout"`（自适应光源描边）。
@@ -80,24 +99,37 @@ python3 <SKILL_DIR>/scripts/pforge.py pixelate draft.png --size 48x48 --palette 
 
 ### 6. 原生 `.aseprite` 二进制分层工程读写与 MCP 工具直调
 - **双向 `.aseprite` 工程支持**：所有构建流程默认直出原生二进制 `<name>.aseprite`；使用 `Rig.render_named_layers_sequence(poses)` + `write_aseprite(...)` 可将各部件与特效保存为**独立时间轴图层 + 动作标签 + 关节轴心 Slice**，人类画师可在 Aseprite 中直接分层续画；已有 `.ase`/`.aseprite` 文件可直接用 `pforge.py aseprite-inspect file.aseprite --unpack-layers` 或 `decompile` 逆向拆解。
-- **MCP 原生工具优先**：若当前会话已连接 `pixelforge` MCP Server（提供 `pixelforge_build`、`pixelforge_inspect`、`pixelforge_region_patch`、`pixelforge_aseprite_inspect` 等 9 个工具），可直接调用 MCP 工具替代终端命令拼接。
+- **MCP 原生工具优先**：若当前会话已连接 `pixelforge` MCP Server（暴露 `pixelforge_palette_guide`、`pixelforge_build`、`pixelforge_build_rig`、`pixelforge_region_patch`、`pixelforge_scene_check`、`pixelforge_aseprite_inspect` 等 **12 个工具**，且每次返回均附带 `agent_checklist.must_view_images` 与 `(x, y)` 修复处方），优先直调 MCP 工具替代手写临时脚本。
 
 ---
 
-## 三、Python 快速调用模板
+## 四、Python 零算术声明式模板
 
 ```python
 import sys
 sys.path.insert(0, "/path/to/pixel-forge/scripts")
-from pforge import Rig, SpriteActor, build_pixel_asset, build_actor_assets, vfx_slash_arc, composite_vfx
+from pforge import build_from_spec, format_palette_guide
 
-# 单资产极速构建
-build_pixel_asset("gem", ["..CC..\n.CWWC.\nCBBBBc\n.bbbb."], palette="endesga32", output_dir="output")
+# 零算术坐标构建多部件、多动作、带独立图层 .aseprite 的角色
+res = build_from_spec({
+    "name": "ember_knight",
+    "palette": "endesga32",
+    "canvas_size": "auto",
+    "outline_mode": "selout",
+    "parts": [
+        {"name": "torso", "at": "center", "grid": ["|..RRRR..| # 胸甲", "|.RYYYYR.|", "|RRRRRRRR|", "|.rrrrrr.|"]},
+        {"name": "head", "attach_to": "torso", "side": "top", "grid": ["|.1111.|", "|1KKKK1|", "|.2222.|"]},
+        {"name": "sword", "attach_to": "torso", "side": "right", "hinge": "grip", "outline_group": 1,
+         "grid": ["|.W.|", "|.1.|", "|YYY|", "|.o.|"]},
+    ],
+    "clips": {"idle": "idle_breathe", "attack": "melee_attack", "hit": "hurt_flash"},
+}, output_dir="output")
+# 随后务必用视觉工具查看 res["agent_checklist"]["must_view_images"] 中的全部看板！
 ```
 
 ---
 
-## 四、进阶参考手册（按需读取，渐进式披露）
+## 五、进阶参考手册（按需读取，渐进式披露）
 
 执行具体细分任务前，请按需查阅本技能目录下的专题指南：
 - **像素画造型、色簇抗锯齿、明暗色阶与抖动技法**：[craft_and_shading.md](./references/craft_and_shading.md)
