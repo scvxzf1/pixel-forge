@@ -14,6 +14,9 @@
 | `lint` | 在终端输出 JSON 或可读像素质量静态检查报告 | `python3 pforge.py lint hero.gif` |
 | `tile` | 生成单块网格 + 3x3 无缝平铺预览 + 接缝断层坐标检测看板 | `python3 pforge.py tile water.gif -o work/tile/` |
 | `nine-slice` | 按 `L,T,R,B` 边距将九宫格母版扩展为指定尺寸 UI 面板 | `python3 pforge.py nine-slice frame.png --margins 5,5,5,5 --size 160x56 -o panel.png` |
+| `autotile` | 从前景/背景两张无缝砖自动合成 47块 Blob 或 16块 Wang 自动拼接图集与测试地图 | `python3 pforge.py autotile --fg grass.png --bg water.png --mode blob47 -o work/at/` |
+| `value-check` | 对任意场景或立绘生成纯灰度眯眼图与深/中/浅三阶明度归纳诊断看板 | `python3 pforge.py value-check scene.png -o work/val/` |
+| `text` | 使用内置比例像素位图字库生成带描边的锐利像素文字与伤害跳字 PNG | `python3 pforge.py text "HP:32/32 -48!" --color "#FEE761" -o work/txt.png` |
 | `demo` | 运行内置史莱姆王多部件 + Sel-Out + 烟尘特效演示 | `python3 pforge.py demo -o output/demo` |
 
 ---
@@ -58,3 +61,11 @@
   - `.add_clip(clip_name, frames, durations_ms=[...], direction="forward")`
 - `build_pixel_asset(name, frames, palette="endesga32", durations_ms=None, fps=8, formats=("gif","apng","webp"), output_dir="output")`。
 - `build_actor_assets(actor, output_dir="output")`：导出所有独立动作 + 合并图集 `*_master_atlas.png` 与 Aseprite `*_master_atlas.json`。
+
+### 5. 自动地形、场景明度沙盒、等轴测与多朝向角色（`autotile`, `scene`, `isometric`）
+- `generate_blob47_tileset(fg_tile, bg_tile, outline_color="#181425", rim_highlight_color=None, rim_shadow_color=None)` / `generate_wang16_tileset(...)`。
+- `render_autotile_map(terrain_map, autotile_bundle)` / `export_autotile_bundle(name, bundle, output_dir=..., sample_map=...)`。
+- `render_pixel_text(text, color="#FFFFFF", outline="#181425", shadow=None, scale=1)`：内置比例像素字库。
+- `SceneComposer(width, height)` + `build_scene_mockup(name, composer, frame_count=12, step_ms=100, output_dir=...)`：Y 轴深度排序实机合成与 4 联灰度明度/轮廓对比度热力诊断。
+- `render_iso_prism(...)` & `IsoScene(half_h=8)`：`2:1` 零裂缝等轴测三维场景搭建。
+- `DirectionalRig(canvas_size, palette="endesga32")` + `export_multidir_sheets(name, dir_rig, directions=DIRECTIONS_4|DIRECTIONS_8)`：四向/八向转身与行走图集自动派生。

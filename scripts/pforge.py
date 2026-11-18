@@ -289,6 +289,59 @@ def _cmd_nine_slice(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_autotile(args: argparse.Namespace) -> int:
+    fg = Image.open(args.fg).convert("RGBA")
+    bg = Image.open(args.bg).convert("RGBA")
+    name = args.name or f"{Path(args.fg).stem}_on_{Path(args.bg).stem}"
+    if args.mode == "blob47":
+        bundle = generate_blob47_tileset(
+            fg,
+            bg,
+            outline_color=args.outline if args.outline != "none" else None,
+            rim_highlight_color=args.rim_light,
+            rim_shadow_color=args.rim_shadow,
+        )
+    else:
+        bundle = generate_wang16_tileset(
+            fg,
+            bg,
+            outline_color=args.outline if args.outline != "none" else None,
+            rim_highlight_color=args.rim_light,
+            rim_shadow_color=args.rim_shadow,
+        )
+    smap = Path(args.map).read_text(encoding="utf-8") if args.map else None
+    export_autotile_bundle(name, bundle, output_dir=args.output_dir, sample_map=smap)
+    return 0
+
+
+def _cmd_value_check(args: argparse.Namespace) -> int:
+    frames, _, _ = load_frames_from_file(args.input, auto_downscale_native=False)
+    frame0 = frames[0]
+    rep = analyze_scene_readability(frame0, frame0, {})
+    sheet = generate_scene_value_sheet(frame0, rep, title=f"Value Check: {Path(args.input).stem}", scale=args.scale)
+    out_dir = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{Path(args.input).stem}_value_check.png"
+    sheet.save(out_path)
+    print(f"Saved 4-Panel Value Check Sheet -> {out_path}")
+    print(json.dumps({k: v for k, v in rep.items() if not k.startswith("_")}, indent=2))
+    return 0
+
+
+def _cmd_text(args: argparse.Namespace) -> int:
+    im = render_pixel_text(
+        args.text,
+        color=args.color,
+        outline=None if args.outline == "none" else args.outline,
+        scale=args.scale,
+    )
+    out_path = Path(args.output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    im.save(out_path)
+    print(f"Saved Pixel Text ({im.width}x{im.height}) -> {out_path}")
+    return 0
+
+
 def _cmd_demo(args: argparse.Namespace) -> int:
     out_dir = Path(args.output_dir)
     rig = Rig((32, 32), palette="endesga32", outline_mode="selout")
@@ -449,6 +502,35 @@ def build_cli_parser() -> argparse.ArgumentParser:
     s_ns.add_argument("--mode", choices=["tile", "stretch"], default="tile")
     s_ns.add_argument("-o", "--output", default="output/ui_panel.png")
     s_ns.set_defaults(func=_cmd_nine_slice)
+
+    # autotile
+    s_at = sub.add_parser("autotile", help="Synthesize 47-tile Blob or 16-tile Wang Auto-Tileset + Mock Map.")
+    s_at.add_argument("--fg", required=True, help="Foreground seamless tile PNG")
+    s_at.add_argument("--bg", required=True, help="Background seamless tile PNG")
+    s_at.add_argument("--mode", choices=["blob47", "wang16"], default="blob47")
+    s_at.add_argument("--outline", default="#181425", help="Border outline color or 'none'")
+    s_at.add_argument("--rim-light", default=None, help="Top-left rim highlight hex")
+    s_at.add_argument("--rim-shadow", default=None, help="Bottom-right cliff/lip shadow hex")
+    s_at.add_argument("--map", default=None, help="Optional ASCII map .txt file ('#'=fg, '.'=bg)")
+    s_at.add_argument("--name", default=None)
+    s_at.add_argument("-o", "--output-dir", default="output/autotile")
+    s_at.set_defaults(func=_cmd_autotile)
+
+    # value-check
+    s_vc = sub.add_parser("value-check", help="Generate Grayscale + 3-Slab Value Posterization check for any scene/sprite.")
+    s_vc.add_argument("input")
+    s_vc.add_argument("--scale", type=int, default=2)
+    s_vc.add_argument("-o", "--output-dir", default="output/value_check")
+    s_vc.set_defaults(func=_cmd_value_check)
+
+    # text
+    s_tx = sub.add_parser("text", help="Render crisp 3x5 retro pixel bitmap text PNG.")
+    s_tx.add_argument("text")
+    s_tx.add_argument("--color", default="#FFFFFF")
+    s_tx.add_argument("--outline", default="#181425", help="Outline hex or 'none'")
+    s_tx.add_argument("--scale", type=int, default=2)
+    s_tx.add_argument("-o", "--output", default="output/pixel_text.png")
+    s_tx.set_defaults(func=_cmd_text)
 
     # demo
     s_dem = sub.add_parser("demo", help="Run built-in King Slime rig + Sel-out + VFX showcase.")

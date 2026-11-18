@@ -212,6 +212,70 @@ class TestPixelForgeSuite(unittest.TestCase):
                 0,
             )
 
+    def test_autotile_blob47_and_wang16(self) -> None:
+        self.assertEqual(len(pf.CANONICAL_BLOB_47), 47)
+        fg = pf.render_grid(["GGGG" * 4] * 16, "endesga32")
+        bg = pf.render_grid(["BBBB" * 4] * 16, "endesga32")
+        blob = pf.generate_blob47_tileset(fg, bg, rim_highlight_color="#91DB69", rim_shadow_color="#8F563B")
+        self.assertEqual(len(blob["tiles"]), 47)
+        m_img = pf.render_autotile_map(["....", ".##.", ".##.", "...."], blob)
+        self.assertEqual(m_img.size, (64, 64))
+
+        wang = pf.generate_wang16_tileset(fg, bg)
+        self.assertEqual(len(wang["tiles"]), 16)
+        w_img = pf.render_autotile_map(["....", ".##.", ".##.", "...."], wang)
+        self.assertEqual(w_img.size, (48, 48))
+
+    def test_scene_composer_and_camouflaged_value_warning(self) -> None:
+        # 1) Low-contrast scene: dark gray actor with NO outline on identical dark gray floor -> must warn!
+        floor = pf.render_grid(["3333" * 4] * 16, "endesga32")
+        camo_actor = pf.render_grid([
+            "........",
+            "..3333..",
+            "..3333..",
+            "..3333..",
+            "........",
+        ], "endesga32")
+        sc_bad = pf.SceneComposer(32, 32)
+        sc_bad.set_tiled_background(floor)
+        sc_bad.add_entity("stealth_blob", camo_actor, pos=(16, 20), anchor="foot", role="actor")
+        _, _, rep_bad = sc_bad.render_sequence(frame_count=2, step_ms=100)
+        self.assertGreater(len(rep_bad["warnings"]), 0)
+        self.assertGreater(rep_bad["actors"]["stealth_blob"]["camouflaged_perimeter_ratio"], 0.5)
+
+        # 2) Outlined bright actor + crisp pixel text -> 0 camouflage warnings
+        clear_actor = pf.auto_outline(pf.render_grid(["......", "..WW..", "..WW..", "......"], "endesga32"), "#181425")
+        sc_good = pf.SceneComposer(48, 32)
+        sc_good.set_tiled_background(floor)
+        sc_good.add_entity("hero", clear_actor, pos=(24, 20), anchor="foot", role="actor")
+        sc_good.add_floating_text("dmg", "-99!", pos=(24, 10))
+        frames, _, rep_good = sc_good.render_sequence(frame_count=2, step_ms=100)
+        self.assertEqual(len(rep_good["warnings"]), 0)
+        self.assertEqual(frames[0].size, (48, 32))
+
+    def test_isometric_prism_and_multidir_rig(self) -> None:
+        prism, apex = pf.render_iso_prism(half_h=6, u_cells=1, v_cells=1, height_z=8)
+        self.assertGreater(prism.width, 20)
+        self.assertGreater(apex[0], 0)
+
+        iso = pf.IsoScene(half_h=6)
+        iso.add_block(0, 0, gz=0, height_z=8, base_color="#63C74D")
+        iso.add_block(1, 0, gz=0, height_z=8, base_color="#63C74D")
+        iso.add_block(0, 1, gz=0, height_z=8, base_color="#63C74D")
+        diorama = iso.render()
+        self.assertIsNotNone(diorama.getchannel("A").getbbox())
+
+        drig = pf.DirectionalRig((24, 24), palette="endesga32")
+        drig.add_part("torso", [".BBBB.", "BBBBBB", ".bbbb."], role="torso", offset=(9, 12))
+        drig.add_part("head", [".SSSS.", "SKSSKS", ".SSSS."], role="head", offset=(9, 7), back_fill_char="L")
+        with tempfile.TemporaryDirectory() as tmp:
+            res4 = pf.export_multidir_sheets("hero", drig, directions=pf.DIRECTIONS_4, output_dir=tmp)
+            with Image.open(res4["walk_sheet_png"]) as ws:
+                self.assertEqual(ws.size, (24 * 4, 24 * 4))
+            res8 = pf.export_multidir_sheets("hero8", drig, directions=pf.DIRECTIONS_8, output_dir=tmp)
+            with Image.open(res8["walk_sheet_png"]) as ws8:
+                self.assertEqual(ws8.size, (24 * 4, 24 * 8))
+
 
 if __name__ == "__main__":
     unittest.main()

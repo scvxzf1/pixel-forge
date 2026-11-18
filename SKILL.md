@@ -68,9 +68,11 @@ python3 <SKILL_DIR>/scripts/pforge.py pixelate draft.png --size 48x48 --palette 
 ```
 读取生成的 `*_compare.png` 与 `*_inspect.png`，在自动生成的 `edit_*.py` 中手工点亮眼睛高光、修顺轮廓阶梯后再交付。
 
-### 4. 无缝地图块（Tileset）与九宫格 UI（9-Slice）
-- **无缝拼接验证**：`python3 <SKILL_DIR>/scripts/pforge.py tile grass.png -o work/tiles/`，读取 `*_tile3x3_inspect.png` 检查 3x3 平铺观感与红标接缝断层坐标。
-- **九宫格面板扩展**：`python3 <SKILL_DIR>/scripts/pforge.py nine-slice box_16x16.png --margins 4,4,4,4 --size 160x56 -o work/dialog.png`。
+### 4. 无缝地图块、47块自动地形（Auto-Tile）、九宫格 UI、等轴测与实机场景明度自检
+- **无缝单砖与九宫格 UI**：`pforge.py tile grass.png`（3x3 接缝断层标红检测）；`pforge.py nine-slice frame.png --margins 4,4,4,4 --size 160x56`。
+- **47块 Blob / 16块 Wang 自动拼接地形**：仅提供前景/背景两张底砖，调用 `pforge.py autotile --fg grass.png --bg water.png --mode blob47`（或 Python `generate_blob47_tileset`），自动合成全部内外转角并铺出测试群岛地图 `*_blob47_inspect.png`。
+- **`2:1` 等轴测建筑与 4/8 向 RPG 角色**：使用 `IsoScene` 构建零裂缝 `2:1` 三面受光等轴测体块场景；使用 `DirectionalRig` + `export_multidir_sheets` 从正面部件派生 `S/E/N/W` 四向或八向旋转与行走图集，并读取 `*_alignment_inspect.png` 核对头顶/脚底水平对齐线。
+- **多资产实机场景沙盒与灰度明度自检**：使用 `SceneComposer` + `render_pixel_text`（内置紧凑像素字库）+ `build_scene_mockup` 合成带 Y 轴遮挡排序与跳字 UI 的实机战斗/探索动图，**必须读取 `*_scene_inspect.png` 检查纯灰度眯眼图与轮廓对比度热力图**，消除角色融入背景的明度打架问题。
 
 ---
 
@@ -94,5 +96,6 @@ build_pixel_asset("gem", ["..CC..\n.CWWC.\nCBBBBc\n.bbbb."], palette="endesga32"
 - **逆向拆解、大图局部 Patch 手术与 AI 图像素化精修**：[edit_and_pixelate.md](./references/edit_and_pixelate.md)
 - **多部件骨骼 Rig、RotSprite 旋转、打击感帧长配方与特效库**：[animation_and_rigging.md](./references/animation_and_rigging.md)
 - **无缝 Tileset 3x3 拼接设计与 9-Slice UI 规范**：[tileset_and_ui.md](./references/tileset_and_ui.md)
+- **47块自动地形、实机场景明度自检、2:1 等轴测与 4/8 向角色派生**：[world_iso_and_scene.md](./references/world_iso_and_scene.md)
 - **完整 CLI 参数与 Python API 速查字典**：[cli_and_api.md](./references/cli_and_api.md)
-- **可运行实战范例脚本**：参见 `./examples/` 目录下的 4 个端到端脚本。
+- **可运行实战范例脚本**：参见 `./examples/` 目录下的 7 个端到端脚本（`01`～`07`）。

@@ -47,6 +47,34 @@
 
 ---
 
+### 5. 自动地形拼接系统（47-Tile Blob & 16-Tile Wang Auto-Tileset）
+仅输入两张同尺寸无缝底砖（如 `16x16` 草地与水面），自动按四象限子块与全局左上光源合成全部 **47 张八邻域 Blob 转角砖**（或 **16 张双网格 Wang 转角砖**），并铺出包含外圆角、内海湾与单格窄桥的实机测试群岛供视觉自检。
+
+| 47-Tile Blob 自动图集与实机测试群岛 | 16-Tile Dual-Grid Wang 自动图集与群岛 |
+| :---: | :---: |
+| ![Blob47](docs/showcase/emerald_coast_blob47_inspect.png) | ![Wang16](docs/showcase/emerald_coast_wang16_inspect.png) |
+
+---
+
+### 6. 多资产实机场景沙盒与四联明度可读性自检（Scene Mockup & Value Check）
+内置 `SceneComposer`（支持脚底 Y 轴自动遮挡排序、运动轨迹与比例像素字库 `render_pixel_text`），一键导出伪实机游玩 GIF 并生成**彩色实机 / 纯灰度眯眼图 / 深中浅三阶明度归纳 / 角色轮廓对比度热力图**四联诊断看板。
+
+| 实机战斗场景合成 GIF (`island_skirmish`) | 四联灰度明度与前景可读性热力看板 |
+| :---: | :---: |
+| ![Scene GIF](docs/showcase/island_skirmish_3x.gif) | ![Scene Value Check](docs/showcase/island_skirmish_scene_inspect.png) |
+
+---
+
+### 7. 严格 `2:1` 等轴测场景（`IsoScene`）与四/八向 RPG 角色自动派生（`DirectionalRig`）
+- **`IsoScene`**：基于 $\mathbb{Z}^2$ 格点基本域的零裂缝 `2:1` 等轴测体块引擎，内置三面受光、前棱 `1px` 高光脊线与画家算法深度排序。
+- **`DirectionalRig`**：从正面（`S`）部件自动推导侧面单目轮廓、背面披风前置与武器左右空间交换，输出 4 向或 8 向行走图集与头顶/脚底对齐标尺看板。
+
+| 2:1 等轴测圣坛微缩场景 | 8 向自动派生转身预览 | 8 向头顶/脚底对齐标尺与 8x4 行走图集 |
+| :---: | :---: | :---: |
+| ![Iso Shrine](docs/showcase/iso_shrine_diorama_4x.png) | ![8Dir Spin](docs/showcase/forest_ranger_8dir_turnaround_6x.gif) | ![8Dir Align](docs/showcase/forest_ranger_8dir_alignment_inspect.png) |
+
+---
+
 ## 一键安装（作为 Agent Skill）
 
 确保环境已安装 `Pillow`（`pip install Pillow`），直接克隆到对应智能体的技能目录即可自动生效：
@@ -82,6 +110,9 @@ pixel-forge/
 │       ├── rig.py                  # 紧凑局部部件骨骼绑定(Rig)、分组描边、多动作状态角色(SpriteActor)
 │       ├── vfx.py                  # 预制像素特效库（弯月刀光、赛璐璐烟尘、受击十字星芒、魔法闪烁）
 │       ├── tileset.py              # Tileset 3x3 无缝拼接边缘断层检测、滚动水面、9-Slice 九宫格 UI 面板
+│       ├── autotile.py             # 47块 Blob 与 16块 Wang 自动拼接地形合成器及实机地图渲染器
+│       ├── scene.py                # 实机场景 Y 轴遮挡合成器、内置比例像素位图字库、4联灰度明度与轮廓对比热力诊断
+│       ├── isometric.py            # 零裂缝 2:1 等轴测三维体块引擎(IsoScene) & 4/8向角色转身行走派生器(DirectionalRig)
 │       ├── linter.py               # 代码级像素静态检查器（孤立噪点、轮廓漏口、曲线阶梯锯齿、体积/基准线异常）
 │       ├── inspector.py            # 多模态全息自检看板（字符色板图例+坐标标尺+深浅双底预览+剪影+洋葱皮+Diff）
 │       └── exporter.py             # GIF / 真半透明 APNG / 无损动态 WebP / 多行精灵表 / Aseprite JSON 导出
@@ -90,12 +121,16 @@ pixel-forge/
 │   ├── edit_and_pixelate.md
 │   ├── animation_and_rigging.md
 │   ├── tileset_and_ui.md
+│   ├── world_iso_and_scene.md
 │   └── cli_and_api.md
-├── examples/                       # 4 个独立可运行的端到端实战脚本
+├── examples/                       # 7 个独立可运行的端到端实战脚本
 │   ├── 01_knight_multi_anim.py
 │   ├── 02_edit_and_recolor.py
 │   ├── 03_pixelate_concept.py
-│   └── 04_tileset_and_9slice.py
+│   ├── 04_tileset_and_9slice.py
+│   ├── 05_autotile_island.py
+│   ├── 06_scene_mockup_value_check.py
+│   └── 07_isometric_and_4dir_rpg.py
 └── tests/
     └── test_pixelforge.py          # 全模块自动化单元测试
 ```

@@ -81,6 +81,30 @@ from .exporter import (
     save_apng,
     save_rgba_gif,
 )
+from .autotile import (
+    CANONICAL_BLOB_47,
+    DEFAULT_SAMPLE_MAP,
+    canonicalize_blob_mask,
+    export_autotile_bundle,
+    generate_blob47_tileset,
+    generate_wang16_tileset,
+    render_autotile_map,
+)
+from .scene import (
+    SceneComposer,
+    analyze_scene_readability,
+    build_scene_mockup,
+    generate_scene_value_sheet,
+    render_pixel_text,
+)
+from .isometric import (
+    DIRECTIONS_4,
+    DIRECTIONS_8,
+    DirectionalRig,
+    IsoScene,
+    export_multidir_sheets,
+    render_iso_prism,
+)
 
 __all__ = [
     "SAFE_ASCII_CHARS",
@@ -156,4 +180,22 @@ __all__ = [
     "build_aseprite_atlas_json",
     "build_pixel_asset",
     "build_actor_assets",
+    "CANONICAL_BLOB_47",
+    "DEFAULT_SAMPLE_MAP",
+    "canonicalize_blob_mask",
+    "generate_blob47_tileset",
+    "generate_wang16_tileset",
+    "render_autotile_map",
+    "export_autotile_bundle",
+    "render_pixel_text",
+    "SceneComposer",
+    "analyze_scene_readability",
+    "generate_scene_value_sheet",
+    "build_scene_mockup",
+    "DIRECTIONS_4",
+    "DIRECTIONS_8",
+    "render_iso_prism",
+    "IsoScene",
+    "DirectionalRig",
+    "export_multidir_sheets",
 ]
