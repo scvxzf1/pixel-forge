@@ -78,6 +78,10 @@ python3 <SKILL_DIR>/scripts/pforge.py pixelate draft.png --size 48x48 --palette 
 - **HD-2D 法线贴图与 360° 火把受光**：调用 `pforge.py normalmap hero.png --emit "#2CE8F5"` 或 `export_hd2d_bundle(..., part_layers=rig.render_part_layers(..., part_profiles={"sword": "ridge"}))`，一键导出兼容 Godot/Unity 的 `*_albedo.png`、`*_normal.png`、`*_emission.png` 与 `*_torch_orbit_6x.gif`，并查看 `*_hd2d_inspect.png` 四象限点光源验证图。
 - **爆炸设定图自动拆件绑骨（Sketch-to-Rig）**：对纯色底部件分解概念图运行 `pforge.py autorig sheet.png --canvas 56x56 --palette endesga32`（边缘漫水安全去底、连通域拆件、统一比例锁色、肩/颈/剑柄轴心推断），查看 `*_autorig_pipeline.png` 后在生成的 `rig_*.py` 上继续精修动作。
 
+### 6. 原生 `.aseprite` 二进制分层工程读写与 MCP 工具直调
+- **双向 `.aseprite` 工程支持**：所有构建流程默认直出原生二进制 `<name>.aseprite`；使用 `Rig.render_named_layers_sequence(poses)` + `write_aseprite(...)` 可将各部件与特效保存为**独立时间轴图层 + 动作标签 + 关节轴心 Slice**，人类画师可在 Aseprite 中直接分层续画；已有 `.ase`/`.aseprite` 文件可直接用 `pforge.py aseprite-inspect file.aseprite --unpack-layers` 或 `decompile` 逆向拆解。
+- **MCP 原生工具优先**：若当前会话已连接 `pixelforge` MCP Server（提供 `pixelforge_build`、`pixelforge_inspect`、`pixelforge_region_patch`、`pixelforge_aseprite_inspect` 等 9 个工具），可直接调用 MCP 工具替代终端命令拼接。
+
 ---
 
 ## 三、Python 快速调用模板
@@ -102,5 +106,6 @@ build_pixel_asset("gem", ["..CC..\n.CWWC.\nCBBBBc\n.bbbb."], palette="endesga32"
 - **无缝 Tileset 3x3 拼接设计与 9-Slice UI 规范**：[tileset_and_ui.md](./references/tileset_and_ui.md)
 - **47块自动地形、实机场景明度自检、2:1 等轴测与 4/8 向角色派生**：[world_iso_and_scene.md](./references/world_iso_and_scene.md)
 - **HD-2D 像素法线动态光影与 AI 设定图自动拆件绑骨**：[hd2d_and_autorig.md](./references/hd2d_and_autorig.md)
+- **原生 `.aseprite` 分层二进制工程读写与 MCP Server 指南**：[aseprite_and_mcp.md](./references/aseprite_and_mcp.md)
 - **完整 CLI 参数与 Python API 速查字典**：[cli_and_api.md](./references/cli_and_api.md)
-- **可运行实战范例脚本**：参见 `./examples/` 目录下的 9 个端到端脚本（`01`～`09`）。
+- **可运行实战范例脚本**：参见 `./examples/` 目录下的 10 个端到端脚本（`01`～`10`）。

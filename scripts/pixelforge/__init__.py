@@ -120,6 +120,12 @@ from .autorig import (
     remove_solid_background,
     segment_parts_from_sheet,
 )
+from .aseprite_io import (
+    AsepriteDocument,
+    generate_aseprite_layer_sheet,
+    read_aseprite,
+    write_aseprite,
+)
 
 __all__ = [
     "SAFE_ASCII_CHARS",
@@ -224,4 +230,8 @@ __all__ = [
     "SegmentedIsland",
     "segment_parts_from_sheet",
     "autorig_from_concept_sheet",
+    "AsepriteDocument",
+    "write_aseprite",
+    "read_aseprite",
+    "generate_aseprite_layer_sheet",
 ]

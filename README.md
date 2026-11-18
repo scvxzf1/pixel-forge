@@ -93,6 +93,14 @@
 
 ---
 
+### 10. 原生 `.aseprite` 二进制分层工程双向读写 + 零依赖 MCP Server（`aseprite_io.py` / `pforge_mcp.py`）
+- **双向 `.aseprite` 二进制引擎**：无需本机安装 Aseprite，纯 Python 按 v1.3 规范直接读写 `.ase` / `.aseprite` 源文件，完整保留**独立部件图层（`0x2004`）、Zlib 压缩与关联 Cel（`0x2005`）、可变帧毫秒时长、动作标签（`idle` / `attack`）、命名 RGBA 调色板与关节轴心 Slice（`0x2022`）**。示例生成的 8 图层源文件见 [`docs/showcase/azure_knight_layered.aseprite`](docs/showcase/azure_knight_layered.aseprite)。
+- **零外部依赖 MCP Server**：`scripts/pforge_mcp.py` 原生实现 JSON-RPC 2.0 Stdio 协议（无需额外安装 `mcp` 包），向智能体暴露 `pixelforge_build`、`pixelforge_inspect`、`pixelforge_region_patch`、`pixelforge_aseprite_inspect` 等 9 个工具。
+
+![Decoded Aseprite 8-Layer Timeline Matrix](docs/showcase/azure_knight_layered_layers_inspect.png)
+
+---
+
 ## 一键安装（作为 Agent Skill）
 
 确保环境已安装 `Pillow`（`pip install Pillow`），直接克隆到对应智能体的技能目录即可自动生效：
@@ -109,6 +117,9 @@ git clone https://github.com/scvxzf1/pixel-forge.git ~/.codex/skills/pixel-forge
 
 # 或挂载到任意项目级工作区
 mkdir -p .agents/skills && git clone https://github.com/scvxzf1/pixel-forge.git .agents/skills/pixel-forge
+
+# （可选）生成 MCP Server 配置并写入 Antigravity / Claude Code
+python3 ~/.gemini/config/skills/pixel-forge/scripts/pforge.py print-mcp-config --write ~/.gemini/config/mcp_config.json
 ```
 
 ---
@@ -118,8 +129,10 @@ mkdir -p .agents/skills && git clone https://github.com/scvxzf1/pixel-forge.git 
 ```text
 pixel-forge/
 ├── SKILL.md                        # 核心 Agent 技能入口（渐进式披露，精炼工作流铁律）
+├── mcp_config.example.json         # MCP Server 配置模板
 ├── scripts/
 │   ├── pforge.py                   # 统一 CLI 命令行工具 & Python 顶层 API 入口
+│   ├── pforge_mcp.py               # 零外部依赖 MCP Stdio Server（暴露 9 个原生像素工具）
 │   └── pixelforge/                 # 模块化核心引擎
 │       ├── palette.py              # 6套经典色板、参考图吸色、HSV语义键分配、色相偏移明暗色阶、一键换色
 │       ├── canvas.py               # ASCII网格编解码、局部切片精修(Patch)、抗锯齿几何画布与Bayer有序抖动
@@ -133,6 +146,7 @@ pixel-forge/
 │       ├── isometric.py            # 零裂缝 2:1 等轴测三维体块引擎(IsoScene) & 4/8向角色转身行走派生器(DirectionalRig)
 │       ├── lighting.py             # HD-2D 逐部件切线法线贴图、自发光遮罩提取与 360° 赛璐璐点光源渲染器
 │       ├── autorig.py              # 爆炸概念图边缘泛洪去底、连通域拆件、统一锁色像素化与自动关节绑骨器
+│       ├── aseprite_io.py          # 原生 .ase/.aseprite v1.3 二进制多图层/关联Cel/标签/色板/Slice双向读写器
 │       ├── linter.py               # 代码级像素静态检查器（孤立噪点、轮廓漏口、曲线阶梯锯齿、体积/基准线异常）
 │       ├── inspector.py            # 多模态全息自检看板（字符色板图例+坐标标尺+深浅双底预览+剪影+洋葱皮+Diff）
 │       └── exporter.py             # GIF / 真半透明 APNG / 无损动态 WebP / 多行精灵表 / Aseprite JSON 导出
@@ -143,8 +157,9 @@ pixel-forge/
 │   ├── tileset_and_ui.md
 │   ├── world_iso_and_scene.md
 │   ├── hd2d_and_autorig.md
+│   ├── aseprite_and_mcp.md
 │   └── cli_and_api.md
-├── examples/                       # 9 个独立可运行的端到端实战脚本
+├── examples/                       # 10 个独立可运行的端到端实战脚本
 │   ├── 01_knight_multi_anim.py
 │   ├── 02_edit_and_recolor.py
 │   ├── 03_pixelate_concept.py
@@ -153,7 +168,8 @@ pixel-forge/
 │   ├── 06_scene_mockup_value_check.py
 │   ├── 07_isometric_and_4dir_rpg.py
 │   ├── 08_hd2d_normal_and_lighting.py
-│   └── 09_sketch_to_rig_boss.py
+│   ├── 09_sketch_to_rig_boss.py
+│   └── 10_aseprite_and_mcp.py
 └── tests/
     └── test_pixelforge.py          # 全模块自动化单元测试
 ```

@@ -106,6 +106,13 @@ class Rig:
             pivots.append(self._part_canvas_pivot(p, im))
         return pivots
 
+    def get_named_canvas_pivots(self) -> Dict[str, Tuple[float, float]]:
+        out: Dict[str, Tuple[float, float]] = {}
+        for pname, p in self.parts.items():
+            im = self._resolve_part_image(p)
+            out[pname] = self._part_canvas_pivot(p, im)
+        return out
+
     def _apply_group_outline(self, layer_img: Image.Image) -> Image.Image:
         if self.outline_mode == "none":
             return layer_img
@@ -256,6 +263,60 @@ class Rig:
 
         layers_info.sort(key=lambda item: (item[0], item[1]))
         return [(im, prof) for _, _, im, prof in layers_info]
+
+    def render_named_layers_sequence(
+        self,
+        poses: Sequence[Mapping[str, Mapping[str, Any]]],
+        include_part_outlines: bool = True,
+    ) -> List[Tuple[str, List[Optional[Image.Image]]]]:
+        """Render a sequence of poses into bottom-to-top independent named layers for `.aseprite` export."""
+        cw, ch = self.canvas_size
+        ordered_parts = sorted(
+            enumerate(self.parts.values()),
+            key=lambda item: (item[1].z_index, item[0]),
+        )
+        result: List[Tuple[str, List[Optional[Image.Image]]]] = []
+
+        for _, part in ordered_parts:
+            pname = part.name
+            p_frames: List[Optional[Image.Image]] = []
+            for pose in poses:
+                ov = pose.get(pname, {})
+                if not ov.get("visible", True):
+                    p_frames.append(None)
+                    continue
+                variant = str(ov.get("variant", "default"))
+                raw_part = self._resolve_part_image(part, variant=variant)
+                if ov.get("flip_h", False) or ov.get("flip_v", False):
+                    raw_part = flip_image(
+                        raw_part,
+                        horizontal=bool(ov.get("flip_h", False)),
+                        vertical=bool(ov.get("flip_v", False)),
+                    )
+                stage = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+                stage.paste(raw_part, part.offset)
+                piv = ov.get("pivot", self._part_canvas_pivot(part, raw_part))
+                transformed = rotsprite(
+                    stage,
+                    angle_deg=float(ov.get("angle", 0.0)),
+                    pivot=piv,
+                    dx=int(round(ov.get("dx", 0))),
+                    dy=int(round(ov.get("dy", 0))),
+                    scale_x=float(ov.get("scale_x", 1.0)),
+                    scale_y=float(ov.get("scale_y", 1.0)),
+                )
+                f_mix = float(ov.get("flash_mix", 0.0))
+                if f_mix > 0.0:
+                    transformed = flash_image(
+                        transformed,
+                        flash_color=ov.get("flash_color", "#FFFFFF"),
+                        mix=f_mix,
+                    )
+                if include_part_outlines and part.outline_group is not None:
+                    transformed = self._apply_group_outline(transformed)
+                p_frames.append(transformed)
+            result.append((pname, p_frames))
+        return result
 
 
 @dataclass

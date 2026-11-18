@@ -19,6 +19,8 @@
 | `text` | 使用内置比例像素位图字库生成带描边的锐利像素文字与伤害跳字 PNG | `python3 pforge.py text "HP:32/32 -48!" --color "#FEE761" -o work/txt.png` |
 | `normalmap` | 生成 HD-2D 切线法线贴图、自发光遮罩、四向光检图与 360° 火把环绕 GIF | `python3 pforge.py normalmap knight.png --emit "#2CE8F5" -o work/hd2d/` |
 | `autorig` | 将纯色底多部件概念图自动去底、连通域拆件、统一锁色并生成可动 `Rig` 脚本 | `python3 pforge.py autorig boss_sheet.png --canvas 56x56 -o work/rig/` |
+| `aseprite-inspect` | 解码原生 `.aseprite` 二进制工程，渲染多图层时间轴拆解矩阵并可解包单层 PNG | `python3 pforge.py aseprite-inspect hero.aseprite --unpack-layers -o work/ase/` |
+| `print-mcp-config` | 输出（或 `--write` 写入）当前路径解析好的 `mcp_config.json` 配置 | `python3 pforge.py print-mcp-config` |
 | `demo` | 运行内置史莱姆王多部件 + Sel-Out + 烟尘特效演示 | `python3 pforge.py demo -o output/demo` |
 
 ---
@@ -78,3 +80,9 @@
 - `generate_emission_map(albedo, emissive_colors=[...])` / `relight_sprite(albedo, normal_map, emission_map=..., light_pos=(lx,ly,lz), cel_bands=4)`。
 - `export_hd2d_bundle(name, albedo, part_layers=..., emissive_colors=..., output_dir="output/hd2d")`。
 - `remove_solid_background(img)` / `segment_parts_from_sheet(img)` / `autorig_from_concept_sheet(source, name=..., canvas_size=(56,56), palette="endesga32", output_dir="output/autorig")`。
+
+### 7. 原生 `.aseprite` 二进制读写与分层导出（`aseprite_io`）
+- `Rig.render_named_layers_sequence(poses)` / `Rig.get_named_canvas_pivots()`：生成按深度排序的独立部件图层序列与命名轴心。
+- `write_aseprite(target, canvas_size, layers, durations_ms, palette=None, frame_tags=None, nine_slice_margins=None, pivots=None, use_linked_cels=False)`。
+- `read_aseprite(source) -> AsepriteDocument`：解析 `32/16/8-bit` `.ase`/`.aseprite` 二进制工程的图层、关联/压缩 Cel、帧时长、标签、色板与切片。
+- `generate_aseprite_layer_sheet(doc, title=..., scale=3) -> Image`：渲染可视化多图层时间轴拆解矩阵看板。

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 from PIL import Image, ImageEnhance, ImageFilter
 
+from .aseprite_io import read_aseprite
 from .canvas import image_to_grid
 from .inspector import generate_holistic_sheet
 from .linter import format_lint_report, lint_frames
@@ -100,43 +101,48 @@ def load_frames_from_file(
     raw_frames: List[Image.Image] = []
     durations: List[int] = []
 
-    with Image.open(src_path) as im:
-        n_frames = getattr(im, "n_frames", 1)
-        if n_frames > 1:
-            for idx in range(n_frames):
-                im.seek(idx)
-                raw_frames.append(im.convert("RGBA"))
-                dur = int(round(im.info.get("duration", 100) or 100))
-                durations.append(max(10, dur))
-        else:
-            sheet = im.convert("RGBA")
-            sw, sh = sheet.size
-            if cols is not None or rows is not None:
-                c = cols or 1
-                r = rows or 1
-                if sw % c != 0 or sh % r != 0:
-                    raise ValueError(f"Image {sw}x{sh} not evenly divisible by cols={c}, rows={r}.")
-                fw, fh = sw // c, sh // r
-                for ry in range(r):
-                    for rx in range(c):
-                        cell = sheet.crop((rx * fw, ry * fh, (rx + 1) * fw, (ry + 1) * fh))
-                        if cell.getchannel("A").getbbox() is not None or len(raw_frames) == 0:
-                            raw_frames.append(cell)
-                            durations.append(120)
-            elif frame_w is not None or frame_h is not None:
-                fw = frame_w or sw
-                fh = frame_h or sh
-                if sw % fw != 0 or sh % fh != 0:
-                    raise ValueError(f"Image {sw}x{sh} not evenly divisible by frame {fw}x{fh}.")
-                for ry in range(sh // fh):
-                    for rx in range(sw // fw):
-                        cell = sheet.crop((rx * fw, ry * fh, (rx + 1) * fw, (ry + 1) * fh))
-                        if cell.getchannel("A").getbbox() is not None or len(raw_frames) == 0:
-                            raw_frames.append(cell)
-                            durations.append(120)
+    if src_path.suffix.lower() in (".ase", ".aseprite"):
+        doc = read_aseprite(src_path)
+        raw_frames = [f.copy() for f in doc.composited_frames]
+        durations = list(doc.durations_ms)
+    else:
+        with Image.open(src_path) as im:
+            n_frames = getattr(im, "n_frames", 1)
+            if n_frames > 1:
+                for idx in range(n_frames):
+                    im.seek(idx)
+                    raw_frames.append(im.convert("RGBA"))
+                    dur = int(round(im.info.get("duration", 100) or 100))
+                    durations.append(max(10, dur))
             else:
-                raw_frames.append(sheet)
-                durations.append(120)
+                sheet = im.convert("RGBA")
+                sw, sh = sheet.size
+                if cols is not None or rows is not None:
+                    c = cols or 1
+                    r = rows or 1
+                    if sw % c != 0 or sh % r != 0:
+                        raise ValueError(f"Image {sw}x{sh} not evenly divisible by cols={c}, rows={r}.")
+                    fw, fh = sw // c, sh // r
+                    for ry in range(r):
+                        for rx in range(c):
+                            cell = sheet.crop((rx * fw, ry * fh, (rx + 1) * fw, (ry + 1) * fh))
+                            if cell.getchannel("A").getbbox() is not None or len(raw_frames) == 0:
+                                raw_frames.append(cell)
+                                durations.append(120)
+                elif frame_w is not None or frame_h is not None:
+                    fw = frame_w or sw
+                    fh = frame_h or sh
+                    if sw % fw != 0 or sh % fh != 0:
+                        raise ValueError(f"Image {sw}x{sh} not evenly divisible by frame {fw}x{fh}.")
+                    for ry in range(sh // fh):
+                        for rx in range(sw // fw):
+                            cell = sheet.crop((rx * fw, ry * fh, (rx + 1) * fw, (ry + 1) * fh))
+                            if cell.getchannel("A").getbbox() is not None or len(raw_frames) == 0:
+                                raw_frames.append(cell)
+                                durations.append(120)
+                else:
+                    raw_frames.append(sheet)
+                    durations.append(120)
 
     downscale_k = 1
     if auto_downscale_native:

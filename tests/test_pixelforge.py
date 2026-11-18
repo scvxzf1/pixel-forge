@@ -322,6 +322,101 @@ class TestPixelForgeSuite(unittest.TestCase):
             self.assertIn("head", res["parts_detected"])
             self.assertTrue(Path(res["files"]["rig_script"]).is_file())
 
+    def test_aseprite_binary_multi_layer_tags_slices_roundtrip(self) -> None:
+        l0_f0 = pf.render_grid(["....", ".BB.", ".BB.", "...."], "endesga32")
+        l0_f1 = l0_f0.copy()  # identical -> exercises Linked Cel when use_linked_cels=True!
+        l1_f0 = pf.render_grid(["RR..", "....", "....", "...."], "endesga32")
+        l1_f1 = pf.render_grid(["....", "....", "....", "..YY"], "endesga32")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ase_path = Path(tmp) / "multi.aseprite"
+            pf.write_aseprite(
+                ase_path,
+                canvas_size=(4, 4),
+                layers=[("body", [l0_f0, l0_f1]), ("fx", [l1_f0, l1_f1])],
+                durations_ms=[180, 65],
+                palette="endesga32",
+                frame_tags=[{"name": "idle", "from": 0, "to": 0}, {"name": "spark", "from": 1, "to": 1}],
+                nine_slice_margins=(1, 1, 1, 1),
+                pivots={"hand": (2.0, 3.0)},
+                use_linked_cels=True,
+            )
+            doc = pf.read_aseprite(ase_path)
+            self.assertEqual((doc.width, doc.height), (4, 4))
+            self.assertEqual(doc.frame_count, 2)
+            self.assertEqual(doc.durations_ms, [180, 65])
+            self.assertEqual([l["name"] for l in doc.layers], ["body", "fx"])
+            self.assertEqual([t["name"] for t in doc.tags], ["idle", "spark"])
+            self.assertEqual(len(doc.slices), 2)
+
+            # Verify exact pixel-level round-trip on individual layers AND composited output!
+            pal = pf.get_palette("endesga32")
+            self.assertEqual(doc.layers[1]["frames"][0].getpixel((0, 0)), pal["R"])
+            self.assertEqual(doc.layers[1]["frames"][1].getpixel((3, 3)), pal["Y"])
+            self.assertEqual(doc.composited_frames[1].getpixel((1, 1)), pal["B"])
+            self.assertEqual(doc.composited_frames[1].getpixel((3, 3)), pal["Y"])
+
+            # Also verify `decompile_asset` can read `.aseprite` directly!
+            dec = pf.decompile_asset(ase_path, output_dir=Path(tmp) / "dec")
+            self.assertEqual(dec["frame_count"], 2)
+            self.assertEqual(dec["durations_ms"], [180, 65])
+
+    def test_mcp_stdio_server_subprocess_protocol(self) -> None:
+        import subprocess
+        mcp_script = ROOT / "scripts" / "pforge_mcp.py"
+        with tempfile.TemporaryDirectory() as tmp:
+            proc = subprocess.Popen(
+                [sys.executable, str(mcp_script)],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                text=True,
+            )
+            assert proc.stdin and proc.stdout
+            msgs = [
+                {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26"}},
+                {"jsonrpc": "2.0", "method": "notifications/initialized"},
+                {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+                {
+                    "jsonrpc": "2.0",
+                    "id": 3,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "pixelforge_build",
+                        "arguments": {
+                            "name": "mcp_gem",
+                            "frames": ["..CC..\n.CWWC.\n.BBBB.\n..bb.."],
+                            "output_dir": str(Path(tmp) / "build"),
+                        },
+                    },
+                },
+                {
+                    "jsonrpc": "2.0",
+                    "id": 4,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "pixelforge_aseprite_inspect",
+                        "arguments": {
+                            "path": str(Path(tmp) / "build" / "mcp_gem.aseprite"),
+                            "output_dir": str(Path(tmp) / "ase_ins"),
+                            "include_inline_image": True,
+                        },
+                    },
+                },
+            ]
+            out_str, _ = proc.communicate("\n".join(json.dumps(m) for m in msgs) + "\n", timeout=15)
+            lines = [json.loads(line) for line in out_str.strip().splitlines() if line.strip()]
+            # Notification has no id -> exactly 4 responses for ids 1, 2, 3, 4
+            self.assertEqual([r["id"] for r in lines], [1, 2, 3, 4])
+            tool_names = {t["name"] for t in lines[1]["result"]["tools"]}
+            self.assertIn("pixelforge_build", tool_names)
+            self.assertIn("pixelforge_aseprite_inspect", tool_names)
+            self.assertFalse(lines[2]["result"]["isError"])
+            # Response 4 has both text JSON and inline base64 PNG image content!
+            c4 = lines[3]["result"]["content"]
+            self.assertEqual(len(c4), 2)
+            self.assertEqual(c4[1]["type"], "image")
+            self.assertEqual(c4[1]["mimeType"], "image/png")
+
 
 if __name__ == "__main__":
     unittest.main()

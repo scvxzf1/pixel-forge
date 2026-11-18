@@ -374,6 +374,47 @@ def _cmd_autorig(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_aseprite_inspect(args: argparse.Namespace) -> int:
+    doc = read_aseprite(args.input)
+    out_dir = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stem = Path(args.input).stem
+    sheet_path = out_dir / f"{stem}_layers_inspect.png"
+    generate_aseprite_layer_sheet(doc, title=f"Aseprite Binary: {stem}", scale=args.scale).save(sheet_path)
+
+    if args.unpack_layers:
+        ldir = out_dir / f"{stem}_layers"
+        ldir.mkdir(parents=True, exist_ok=True)
+        for l_idx, layer in enumerate(doc.layers):
+            safe_name = "".join(ch if ch.isalnum() or ch in ("_", "-") else "_" for ch in layer["name"])
+            for f_idx, fim in enumerate(layer["frames"]):
+                fim.save(ldir / f"L{l_idx:02d}_{safe_name}_F{f_idx:02d}.png")
+
+    print(f"Decoded .aseprite [{stem}] -> {sheet_path}")
+    print(json.dumps(doc.summary_dict(), indent=2, ensure_ascii=False))
+    return 0
+
+
+def _cmd_print_mcp_config(args: argparse.Namespace) -> int:
+    mcp_script = str((_SCRIPTS_DIR / "pforge_mcp.py").resolve())
+    cfg = {
+        "mcpServers": {
+            "pixelforge": {
+                "command": sys.executable or "python3",
+                "args": [mcp_script],
+            }
+        }
+    }
+    txt = json.dumps(cfg, indent=2, ensure_ascii=False)
+    print(txt)
+    if args.write:
+        out_p = Path(args.write)
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        out_p.write_text(txt + "\n", encoding="utf-8")
+        print(f"Wrote MCP config -> {out_p}", file=sys.stderr)
+    return 0
+
+
 def _cmd_demo(args: argparse.Namespace) -> int:
     out_dir = Path(args.output_dir)
     rig = Rig((32, 32), palette="endesga32", outline_mode="selout")
@@ -586,6 +627,19 @@ def build_cli_parser() -> argparse.ArgumentParser:
     s_ar.add_argument("--name", default=None)
     s_ar.add_argument("-o", "--output-dir", default="output/autorig")
     s_ar.set_defaults(func=_cmd_autorig)
+
+    # aseprite-inspect
+    s_ase = sub.add_parser("aseprite-inspect", help="Decode a binary .aseprite file and render its Layer/Timeline matrix.")
+    s_ase.add_argument("input", help="Path to .ase or .aseprite file")
+    s_ase.add_argument("--scale", type=int, default=3)
+    s_ase.add_argument("--unpack-layers", action="store_true", help="Export individual layer cel PNGs")
+    s_ase.add_argument("-o", "--output-dir", default="output/aseprite_inspect")
+    s_ase.set_defaults(func=_cmd_aseprite_inspect)
+
+    # print-mcp-config
+    s_mcp = sub.add_parser("print-mcp-config", help="Print or write ready-to-use mcp_config.json for PixelForge MCP Server.")
+    s_mcp.add_argument("--write", default=None, help="Optional path to write mcp_config.json")
+    s_mcp.set_defaults(func=_cmd_print_mcp_config)
 
     # demo
     s_dem = sub.add_parser("demo", help="Run built-in King Slime rig + Sel-out + VFX showcase.")

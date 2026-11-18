@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 from PIL import Image, PngImagePlugin
 
+from .aseprite_io import write_aseprite
 from .canvas import GridLike, render_grid
 from .inspector import generate_holistic_sheet
 from .linter import format_lint_report, lint_frames
@@ -158,7 +159,8 @@ def build_pixel_asset(
     baseline_y: Optional[int] = None,
     pivots: Optional[Sequence[Tuple[float, float]]] = None,
     nine_slice_margins: Optional[Tuple[int, int, int, int]] = None,
-    formats: Sequence[str] = ("gif", "apng", "webp"),
+    named_layers: Optional[Sequence[Tuple[str, Sequence[Optional[Image.Image]]]]] = None,
+    formats: Sequence[str] = ("gif", "apng", "webp", "aseprite"),
     output_dir: Union[str, Path] = "output",
 ) -> Dict[str, Any]:
     """Render, lint, inspect, and export a static or animated pixel-art asset."""
@@ -257,6 +259,22 @@ def build_pixel_asset(
         files["webp_1x"] = str(webp_1x)
         files["webp_scaled"] = str(webp_sc)
 
+    if "aseprite" in fmt_set:
+        ase_file = out / f"{name}.aseprite"
+        ase_layers = list(named_layers) if named_layers is not None else [("Layer 1", rendered)]
+        piv_dict = {str(i): p for i, p in enumerate(pivots)} if pivots else None
+        write_aseprite(
+            ase_file,
+            canvas_size=(fw, fh),
+            layers=ase_layers,
+            durations_ms=durs,
+            palette=palette,
+            frame_tags=[{"name": "default", "from": 0, "to": len(rendered) - 1, "direction": "forward"}] if len(rendered) > 1 else None,
+            nine_slice_margins=nine_slice_margins,
+            pivots=piv_dict,
+        )
+        files["aseprite"] = str(ase_file)
+
     # 5. Export Aseprite-compatible JSON Atlas + Meta JSON
     slices_meta = []
     if nine_slice_margins is not None:
@@ -308,7 +326,8 @@ def build_actor_assets(
     preview_scale: int = 8,
     inspect_scale: Optional[int] = None,
     pivots: Optional[Sequence[Tuple[float, float]]] = None,
-    formats: Sequence[str] = ("gif", "apng", "webp"),
+    named_layers_by_clip: Optional[Mapping[str, Sequence[Tuple[str, Sequence[Optional[Image.Image]]]]]] = None,
+    formats: Sequence[str] = ("gif", "apng", "webp", "aseprite"),
 ) -> Dict[str, Any]:
     """Export all AnimationClips of a multi-action `SpriteActor` plus a combined Atlas & JSON."""
     _validate_asset_name(actor.name)
@@ -330,6 +349,7 @@ def build_actor_assets(
 
     for row_idx, clip in enumerate(clip_List):
         clip_asset_name = f"{actor.name}_{clip.name}"
+        clip_layers = named_layers_by_clip.get(clip.name) if named_layers_by_clip else None
         clip_meta = build_pixel_asset(
             name=clip_asset_name,
             frames=clip.frames,
@@ -338,6 +358,7 @@ def build_actor_assets(
             preview_scale=preview_scale,
             inspect_scale=inspect_scale,
             pivots=pivots,
+            named_layers=clip_layers,
             formats=formats,
             output_dir=out,
         )
@@ -382,11 +403,49 @@ def build_actor_assets(
         Image.Resampling.NEAREST,
     ).save(atlas_scaled_png)
 
+    master_ase_path: Optional[Path] = None
+    if "aseprite" in {f.lower() for f in formats}:
+        master_ase_path = out / f"{actor.name}_master.aseprite"
+        all_durs = [d for c in clip_List for d in c.durations_ms]
+        if named_layers_by_clip and all(c.name in named_layers_by_clip for c in clip_List):
+            layer_names_order: List[str] = []
+            for c in clip_List:
+                for lname, _ in named_layers_by_clip[c.name]:
+                    if lname not in layer_names_order:
+                        layer_names_order.append(lname)
+            merged_layers: List[Tuple[str, List[Optional[Image.Image]]]] = []
+            for lname in layer_names_order:
+                cat_frames: List[Optional[Image.Image]] = []
+                for c in clip_List:
+                    cmap = dict(named_layers_by_clip[c.name])
+                    if lname in cmap:
+                        cat_frames.extend(cmap[lname])
+                    else:
+                        cat_frames.extend([None] * len(c.frames))
+                merged_layers.append((lname, cat_frames))
+        else:
+            all_flat = [f for c in clip_List for f in c.frames]
+            merged_layers = [("Actor", all_flat)]
+
+        piv_dict = {str(i): p for i, p in enumerate(pivots)} if pivots else None
+        write_aseprite(
+            master_ase_path,
+            canvas_size=(fw, fh),
+            layers=merged_layers,
+            durations_ms=all_durs,
+            palette=actor.palette,
+            frame_tags=frame_tags,
+            pivots=piv_dict,
+        )
+
     print(f"Built Multi-Action Actor [{actor.name}] ({len(clip_List)} clips -> {atlas_png})")
-    return {
+    res_out: Dict[str, Any] = {
         "actor": actor.name,
         "clips": clip_summaries,
         "master_atlas_png": str(atlas_png),
         "master_atlas_scaled_png": str(atlas_scaled_png),
         "master_atlas_json": str(atlas_json_path),
     }
+    if master_ase_path is not None:
+        res_out["master_aseprite"] = str(master_ase_path)
+    return res_out

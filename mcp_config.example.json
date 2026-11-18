@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "pixelforge": {
+      "command": "python3",
+      "args": [
+        "/ABSOLUTE/PATH/TO/pixel-forge/scripts/pforge_mcp.py"
+      ]
+    }
+  }
+}
