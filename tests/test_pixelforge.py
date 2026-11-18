@@ -276,6 +276,52 @@ class TestPixelForgeSuite(unittest.TestCase):
             with Image.open(res8["walk_sheet_png"]) as ws8:
                 self.assertEqual(ws8.size, (24 * 4, 24 * 8))
 
+    def test_hd2d_normal_orientations_and_emission(self) -> None:
+        # Build a 16x16 filled circle -> check OpenGL normal directions!
+        c = pf.PixelCanvas(16, 16).circle(8, 8, 5, fill="B")
+        disc = c.render("endesga32")
+        # Add 1 glowing cyan center pixel
+        disc.putpixel((8, 8), pf.parse_color("#2CE8F5"))
+
+        nmap, _ = pf.generate_normal_map(disc, profile="dome", bevel_px=5.0, cluster_relief=0.0, luminance_relief=0.0)
+        # Left edge (4, 8): outward normal points LEFT (-X -> R < 115)
+        self.assertLess(nmap.getpixel((4, 8))[0], 115)
+        # Right edge (12, 8): outward normal points RIGHT (+X -> R > 140)
+        self.assertGreater(nmap.getpixel((12, 8))[0], 140)
+        # Top edge (8, 4): outward normal points UP (+Y -> G > 140)
+        self.assertGreater(nmap.getpixel((8, 4))[1], 140)
+        # Bottom edge (8, 12): outward normal points DOWN (-Y -> G < 115)
+        self.assertLess(nmap.getpixel((8, 12))[1], 115)
+
+        emap = pf.generate_emission_map(disc, emissive_colors=["#2CE8F5"])
+        # Relight in pitch darkness (intensity=0, ambient=#000000): only emissive center stays bright!
+        lit_dark = pf.relight_sprite(disc, nmap, emission_map=emap, ambient_color="#000000", intensity=0.0, specular_strength=0.0)
+        self.assertGreater(lit_dark.getpixel((8, 8))[1], 200)
+        self.assertEqual(lit_dark.getpixel((6, 8))[:3], (0, 0, 0))
+
+    def test_autorig_preserves_interior_whites_and_segments_islands(self) -> None:
+        from PIL import ImageDraw
+        sheet = Image.new("RGB", (160, 120), (250, 250, 250))
+        d = ImageDraw.Draw(sheet)
+        # Torso in center
+        d.rectangle([60, 55, 100, 105], fill=(30, 100, 200), outline=(20, 20, 30), width=3)
+        # Head above with pure-white enclosed interior eye!
+        d.rectangle([66, 12, 94, 40], fill=(20, 20, 30))
+        d.rectangle([74, 20, 86, 32], fill=(255, 255, 255))
+        # Tall weapon on right
+        d.rectangle([125, 40, 137, 100], fill=(220, 60, 60), outline=(20, 20, 30), width=2)
+
+        clean = pf.remove_solid_background(sheet)
+        # Corner bg must be alpha=0, while enclosed white eye at (80, 26) MUST remain opaque white!
+        self.assertEqual(clean.getpixel((0, 0))[3], 0)
+        self.assertEqual(clean.getpixel((80, 26)), (255, 255, 255, 255))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            res = pf.autorig_from_concept_sheet(sheet, name="bot", canvas_size=(40, 40), part_scale_target=32, output_dir=tmp)
+            self.assertIn("torso", res["parts_detected"])
+            self.assertIn("head", res["parts_detected"])
+            self.assertTrue(Path(res["files"]["rig_script"]).is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -75,6 +75,24 @@
 
 ---
 
+### 8. HD-2D 像素法线贴图、自发光遮罩与 360° 动态火把打光（`lighting.py`）
+支持按部件几何特征独立生成浮雕高度场与 OpenGL 标准切线空间法线贴图（如盔甲/圆盾用球面 `dome`、剑刃用双斜面锋脊 `ridge`），提取自发光层（`emission`），并渲染赛璐璐色阶量化的 360° 环绕点光源验证 GIF。
+
+| 360° 动态火把环绕受光 (`hd2d_azure_knight`) | 切线法线 + 高度浮雕 + 发光层 + 四向光检看板 |
+| :---: | :---: |
+| ![Torch Orbit](docs/showcase/hd2d_azure_knight_torch_orbit_6x.gif) | ![HD2D Inspect](docs/showcase/hd2d_azure_knight_hd2d_inspect.png) |
+
+---
+
+### 9. “生图概念爆炸图 → 自动拆件像素化 → 可动 Rig 绑骨”混合管线（`autorig.py`）
+针对纯色底部件分解原画，通过边缘泛洪安全去底（保留内部纯白眼睛与剑芯）、8 邻域连通域分割、统一比例共享调色板锁色与肩/颈/剑柄轴心自动推断，一键拼装出可动角色并导出 `rig_<name>.py` 源码，还可直接串联 HD-2D 动态光影。
+
+| 三阶段拆件绑骨全链路看板 | 自动拼装振翅挥剑动图 | 串联 HD-2D 火把动态光影 |
+| :---: | :---: | :---: |
+| ![AutoRig Pipeline](docs/showcase/seraph_guardian_autorig_pipeline.png) | ![AutoRig Anim](docs/showcase/seraph_guardian_autorig_8x.gif) | ![AutoRig HD2D](docs/showcase/seraph_guardian_hd2d_torch_orbit_5x.gif) |
+
+---
+
 ## 一键安装（作为 Agent Skill）
 
 确保环境已安装 `Pillow`（`pip install Pillow`），直接克隆到对应智能体的技能目录即可自动生效：
@@ -113,6 +131,8 @@ pixel-forge/
 │       ├── autotile.py             # 47块 Blob 与 16块 Wang 自动拼接地形合成器及实机地图渲染器
 │       ├── scene.py                # 实机场景 Y 轴遮挡合成器、内置比例像素位图字库、4联灰度明度与轮廓对比热力诊断
 │       ├── isometric.py            # 零裂缝 2:1 等轴测三维体块引擎(IsoScene) & 4/8向角色转身行走派生器(DirectionalRig)
+│       ├── lighting.py             # HD-2D 逐部件切线法线贴图、自发光遮罩提取与 360° 赛璐璐点光源渲染器
+│       ├── autorig.py              # 爆炸概念图边缘泛洪去底、连通域拆件、统一锁色像素化与自动关节绑骨器
 │       ├── linter.py               # 代码级像素静态检查器（孤立噪点、轮廓漏口、曲线阶梯锯齿、体积/基准线异常）
 │       ├── inspector.py            # 多模态全息自检看板（字符色板图例+坐标标尺+深浅双底预览+剪影+洋葱皮+Diff）
 │       └── exporter.py             # GIF / 真半透明 APNG / 无损动态 WebP / 多行精灵表 / Aseprite JSON 导出
@@ -122,15 +142,18 @@ pixel-forge/
 │   ├── animation_and_rigging.md
 │   ├── tileset_and_ui.md
 │   ├── world_iso_and_scene.md
+│   ├── hd2d_and_autorig.md
 │   └── cli_and_api.md
-├── examples/                       # 7 个独立可运行的端到端实战脚本
+├── examples/                       # 9 个独立可运行的端到端实战脚本
 │   ├── 01_knight_multi_anim.py
 │   ├── 02_edit_and_recolor.py
 │   ├── 03_pixelate_concept.py
 │   ├── 04_tileset_and_9slice.py
 │   ├── 05_autotile_island.py
 │   ├── 06_scene_mockup_value_check.py
-│   └── 07_isometric_and_4dir_rpg.py
+│   ├── 07_isometric_and_4dir_rpg.py
+│   ├── 08_hd2d_normal_and_lighting.py
+│   └── 09_sketch_to_rig_boss.py
 └── tests/
     └── test_pixelforge.py          # 全模块自动化单元测试
 ```

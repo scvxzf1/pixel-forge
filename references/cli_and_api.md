@@ -17,6 +17,8 @@
 | `autotile` | 从前景/背景两张无缝砖自动合成 47块 Blob 或 16块 Wang 自动拼接图集与测试地图 | `python3 pforge.py autotile --fg grass.png --bg water.png --mode blob47 -o work/at/` |
 | `value-check` | 对任意场景或立绘生成纯灰度眯眼图与深/中/浅三阶明度归纳诊断看板 | `python3 pforge.py value-check scene.png -o work/val/` |
 | `text` | 使用内置比例像素位图字库生成带描边的锐利像素文字与伤害跳字 PNG | `python3 pforge.py text "HP:32/32 -48!" --color "#FEE761" -o work/txt.png` |
+| `normalmap` | 生成 HD-2D 切线法线贴图、自发光遮罩、四向光检图与 360° 火把环绕 GIF | `python3 pforge.py normalmap knight.png --emit "#2CE8F5" -o work/hd2d/` |
+| `autorig` | 将纯色底多部件概念图自动去底、连通域拆件、统一锁色并生成可动 `Rig` 脚本 | `python3 pforge.py autorig boss_sheet.png --canvas 56x56 -o work/rig/` |
 | `demo` | 运行内置史莱姆王多部件 + Sel-Out + 烟尘特效演示 | `python3 pforge.py demo -o output/demo` |
 
 ---
@@ -69,3 +71,10 @@
 - `SceneComposer(width, height)` + `build_scene_mockup(name, composer, frame_count=12, step_ms=100, output_dir=...)`：Y 轴深度排序实机合成与 4 联灰度明度/轮廓对比度热力诊断。
 - `render_iso_prism(...)` & `IsoScene(half_h=8)`：`2:1` 零裂缝等轴测三维场景搭建。
 - `DirectionalRig(canvas_size, palette="endesga32")` + `export_multidir_sheets(name, dir_rig, directions=DIRECTIONS_4|DIRECTIONS_8)`：四向/八向转身与行走图集自动派生。
+
+### 6. HD-2D 动态法线光影与设定图自动拆件绑骨（`lighting`, `autorig`）
+- `Rig.render_part_layers(pose=None, part_profiles={"sword": "ridge", ...})`：导出逐部件浮雕法线源。
+- `generate_normal_map(source, profile="dome"|"bevel"|"ridge", bevel_px=4.5, bump_strength=2.2)`。
+- `generate_emission_map(albedo, emissive_colors=[...])` / `relight_sprite(albedo, normal_map, emission_map=..., light_pos=(lx,ly,lz), cel_bands=4)`。
+- `export_hd2d_bundle(name, albedo, part_layers=..., emissive_colors=..., output_dir="output/hd2d")`。
+- `remove_solid_background(img)` / `segment_parts_from_sheet(img)` / `autorig_from_concept_sheet(source, name=..., canvas_size=(56,56), palette="endesga32", output_dir="output/autorig")`。

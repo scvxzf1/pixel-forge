@@ -342,6 +342,38 @@ def _cmd_text(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_normalmap(args: argparse.Namespace) -> int:
+    frames, _, _ = load_frames_from_file(args.input, auto_downscale_native=not args.keep_scale)
+    em_cols = [c.strip() for c in args.emit.split(",") if c.strip()] if args.emit else None
+    name = args.name or Path(args.input).stem
+    export_hd2d_bundle(
+        name=name,
+        albedo=frames[0],
+        emissive_colors=em_cols,
+        profile=args.profile,
+        bevel_px=args.bevel,
+        bump_strength=args.bump,
+        output_dir=args.output_dir,
+    )
+    return 0
+
+
+def _cmd_autorig(args: argparse.Namespace) -> int:
+    cw, ch = _parse_wh(args.canvas)
+    pal = _load_palette_arg(args.palette)
+    name = args.name or Path(args.input).stem
+    autorig_from_concept_sheet(
+        args.input,
+        name=name,
+        canvas_size=(cw, ch),
+        part_scale_target=args.part_scale,
+        palette=pal,
+        assemble_exploded=not args.keep_layout,
+        output_dir=args.output_dir,
+    )
+    return 0
+
+
 def _cmd_demo(args: argparse.Namespace) -> int:
     out_dir = Path(args.output_dir)
     rig = Rig((32, 32), palette="endesga32", outline_mode="selout")
@@ -531,6 +563,29 @@ def build_cli_parser() -> argparse.ArgumentParser:
     s_tx.add_argument("--scale", type=int, default=2)
     s_tx.add_argument("-o", "--output", default="output/pixel_text.png")
     s_tx.set_defaults(func=_cmd_text)
+
+    # normalmap
+    s_nm = sub.add_parser("normalmap", help="Generate HD-2D Normal Map + Emission Mask + 360 Torch Orbit GIF.")
+    s_nm.add_argument("input")
+    s_nm.add_argument("--profile", choices=["dome", "bevel", "ridge"], default="dome")
+    s_nm.add_argument("--bevel", type=float, default=4.5)
+    s_nm.add_argument("--bump", type=float, default=2.2)
+    s_nm.add_argument("--emit", default=None, help="Comma-separated emissive hex colors, e.g. #2CE8F5,#FEE761")
+    s_nm.add_argument("--name", default=None)
+    s_nm.add_argument("--keep-scale", action="store_true")
+    s_nm.add_argument("-o", "--output-dir", default="output/hd2d")
+    s_nm.set_defaults(func=_cmd_normalmap)
+
+    # autorig
+    s_ar = sub.add_parser("autorig", help="Segment exploded AI/concept sheet into pixel parts + articulated Rig.")
+    s_ar.add_argument("input")
+    s_ar.add_argument("--canvas", default="56x56", help="Assembled stage WxH (e.g. 56x56)")
+    s_ar.add_argument("--part-scale", type=int, default=42, help="Target pixel span across segmented parts")
+    s_ar.add_argument("--palette", default="endesga32", help="endesga32|sweetie16|pico8|resurrect64|auto")
+    s_ar.add_argument("--keep-layout", action="store_true", help="Do not dock exploded parts onto torso sockets")
+    s_ar.add_argument("--name", default=None)
+    s_ar.add_argument("-o", "--output-dir", default="output/autorig")
+    s_ar.set_defaults(func=_cmd_autorig)
 
     # demo
     s_dem = sub.add_parser("demo", help="Run built-in King Slime rig + Sel-out + VFX showcase.")

@@ -105,6 +105,21 @@ from .isometric import (
     export_multidir_sheets,
     render_iso_prism,
 )
+from .lighting import (
+    FLAT_NORMAL_RGBA,
+    compute_height_map,
+    export_hd2d_bundle,
+    generate_emission_map,
+    generate_normal_map,
+    height_to_normal_map,
+    relight_sprite,
+)
+from .autorig import (
+    SegmentedIsland,
+    autorig_from_concept_sheet,
+    remove_solid_background,
+    segment_parts_from_sheet,
+)
 
 __all__ = [
     "SAFE_ASCII_CHARS",
@@ -198,4 +213,15 @@ __all__ = [
     "IsoScene",
     "DirectionalRig",
     "export_multidir_sheets",
+    "FLAT_NORMAL_RGBA",
+    "compute_height_map",
+    "height_to_normal_map",
+    "generate_normal_map",
+    "generate_emission_map",
+    "relight_sprite",
+    "export_hd2d_bundle",
+    "remove_solid_background",
+    "SegmentedIsland",
+    "segment_parts_from_sheet",
+    "autorig_from_concept_sheet",
 ]

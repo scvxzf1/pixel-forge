@@ -207,6 +207,56 @@ class Rig:
 
         return final
 
+    def render_part_layers(
+        self,
+        pose: Optional[Mapping[str, Mapping[str, Any]]] = None,
+        part_profiles: Optional[Mapping[str, str]] = None,
+    ) -> List[Tuple[Image.Image, str]]:
+        """Render individual z-sorted `(part_image, relief_profile)` layers for HD-2D Normal Map generation."""
+        pose_map = pose or {}
+        prof_map = part_profiles or {}
+        cw, ch = self.canvas_size
+        layers_info: List[Tuple[int, int, Image.Image, str]] = []
+
+        for order_idx, (pname, part) in enumerate(self.parts.items()):
+            ov = pose_map.get(pname, {})
+            if not ov.get("visible", True):
+                continue
+            variant = str(ov.get("variant", "default"))
+            raw_part = self._resolve_part_image(part, variant=variant)
+            if ov.get("flip_h", False) or ov.get("flip_v", False):
+                raw_part = flip_image(
+                    raw_part,
+                    horizontal=bool(ov.get("flip_h", False)),
+                    vertical=bool(ov.get("flip_v", False)),
+                )
+            stage = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+            stage.paste(raw_part, part.offset)
+            piv = ov.get("pivot", self._part_canvas_pivot(part, raw_part))
+            transformed = rotsprite(
+                stage,
+                angle_deg=float(ov.get("angle", 0.0)),
+                pivot=piv,
+                dx=int(round(ov.get("dx", 0))),
+                dy=int(round(ov.get("dy", 0))),
+                scale_x=float(ov.get("scale_x", 1.0)),
+                scale_y=float(ov.get("scale_y", 1.0)),
+            )
+            if part.outline_group is not None:
+                transformed = self._apply_group_outline(transformed)
+
+            default_prof = (
+                "ridge"
+                if any(k in pname.lower() for k in ("sword", "blade", "spear", "dagger", "crystal", "horn"))
+                else "dome"
+            )
+            prof = prof_map.get(pname, default_prof)
+            z = int(ov.get("z_index", part.z_index))
+            layers_info.append((z, order_idx, transformed, prof))
+
+        layers_info.sort(key=lambda item: (item[0], item[1]))
+        return [(im, prof) for _, _, im, prof in layers_info]
+
 
 @dataclass
 class AnimationClip:

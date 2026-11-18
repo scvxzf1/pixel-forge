@@ -74,6 +74,10 @@ python3 <SKILL_DIR>/scripts/pforge.py pixelate draft.png --size 48x48 --palette 
 - **`2:1` 等轴测建筑与 4/8 向 RPG 角色**：使用 `IsoScene` 构建零裂缝 `2:1` 三面受光等轴测体块场景；使用 `DirectionalRig` + `export_multidir_sheets` 从正面部件派生 `S/E/N/W` 四向或八向旋转与行走图集，并读取 `*_alignment_inspect.png` 核对头顶/脚底水平对齐线。
 - **多资产实机场景沙盒与灰度明度自检**：使用 `SceneComposer` + `render_pixel_text`（内置紧凑像素字库）+ `build_scene_mockup` 合成带 Y 轴遮挡排序与跳字 UI 的实机战斗/探索动图，**必须读取 `*_scene_inspect.png` 检查纯灰度眯眼图与轮廓对比度热力图**，消除角色融入背景的明度打架问题。
 
+### 5. HD-2D 像素法线动态光影与“生图拆件 → 自动绑骨（Sketch-to-Rig）”
+- **HD-2D 法线贴图与 360° 火把受光**：调用 `pforge.py normalmap hero.png --emit "#2CE8F5"` 或 `export_hd2d_bundle(..., part_layers=rig.render_part_layers(..., part_profiles={"sword": "ridge"}))`，一键导出兼容 Godot/Unity 的 `*_albedo.png`、`*_normal.png`、`*_emission.png` 与 `*_torch_orbit_6x.gif`，并查看 `*_hd2d_inspect.png` 四象限点光源验证图。
+- **爆炸设定图自动拆件绑骨（Sketch-to-Rig）**：对纯色底部件分解概念图运行 `pforge.py autorig sheet.png --canvas 56x56 --palette endesga32`（边缘漫水安全去底、连通域拆件、统一比例锁色、肩/颈/剑柄轴心推断），查看 `*_autorig_pipeline.png` 后在生成的 `rig_*.py` 上继续精修动作。
+
 ---
 
 ## 三、Python 快速调用模板
@@ -97,5 +101,6 @@ build_pixel_asset("gem", ["..CC..\n.CWWC.\nCBBBBc\n.bbbb."], palette="endesga32"
 - **多部件骨骼 Rig、RotSprite 旋转、打击感帧长配方与特效库**：[animation_and_rigging.md](./references/animation_and_rigging.md)
 - **无缝 Tileset 3x3 拼接设计与 9-Slice UI 规范**：[tileset_and_ui.md](./references/tileset_and_ui.md)
 - **47块自动地形、实机场景明度自检、2:1 等轴测与 4/8 向角色派生**：[world_iso_and_scene.md](./references/world_iso_and_scene.md)
+- **HD-2D 像素法线动态光影与 AI 设定图自动拆件绑骨**：[hd2d_and_autorig.md](./references/hd2d_and_autorig.md)
 - **完整 CLI 参数与 Python API 速查字典**：[cli_and_api.md](./references/cli_and_api.md)
-- **可运行实战范例脚本**：参见 `./examples/` 目录下的 7 个端到端脚本（`01`～`07`）。
+- **可运行实战范例脚本**：参见 `./examples/` 目录下的 9 个端到端脚本（`01`～`09`）。
